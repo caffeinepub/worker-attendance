@@ -21,15 +21,35 @@ export function useGetAllWorkers() {
   });
 }
 
+export type WorkerInput = Omit<Worker, "employeeId">;
+
 export function useAddWorker() {
   const { actor } = useActor();
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (worker: Worker) => {
+  return useMutation<string, Error, WorkerInput>({
+    mutationFn: async (worker: WorkerInput) => {
       if (!actor) throw new Error("Not connected");
-      return actor.addWorker(worker);
+      // Backend returns auto-generated employeeId (EMP-NNN)
+      const result = await (actor as any).addWorker(worker);
+      return typeof result === "string" ? result : "";
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workers"] }),
+  });
+}
+
+export function useGetMyId() {
+  const { actor, isFetching } = useActor();
+  return useQuery<string>({
+    queryKey: ["myId"],
+    queryFn: async () => {
+      if (!actor) return "USR";
+      try {
+        return await (actor as any).getMyId();
+      } catch {
+        return "USR";
+      }
+    },
+    enabled: !!actor && !isFetching,
   });
 }
 

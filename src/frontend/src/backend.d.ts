@@ -49,6 +49,7 @@ export interface Worker {
     village: string;
     aadhaarNumber: string;
     phone: string;
+    bankBranchName: string;
 }
 export interface UserProfile {
     name: string;
@@ -70,20 +71,20 @@ export interface backendInterface {
     getAttendanceByWorker(workerId: string): Promise<Array<AttendanceRecord>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getMasterEntryGrantees(): Promise<Array<Principal>>;
+    getRegisteredUsers(): Promise<Array<[Principal, UserProfile]>>;
     getTodayCheckIns(today: string): Promise<Array<AttendanceRecord>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getWork(workId: string): Promise<Work>;
     getWorker(employeeId: string): Promise<Worker>;
-    isCallerAdmin(): Promise<boolean>;
-    hasMasterEntryPermission(): Promise<boolean>;
     grantMasterEntryPermission(user: Principal): Promise<void>;
-    revokeMasterEntryPermission(user: Principal): Promise<void>;
-    getMasterEntryGrantees(): Promise<Array<Principal>>;
-    getRegisteredUsers(): Promise<Array<[Principal, UserProfile]>>;
+    hasMasterEntryPermission(): Promise<boolean>;
+    isCallerAdmin(): Promise<boolean>;
     recordCheckIn(recordId: string, workerId: string, workId: string, checkInPhotoId: string, checkInTime: Time, checkInLat: number, checkInLng: number): Promise<void>;
     recordCheckOut(recordId: string, checkOutPhotoId: string, checkOutTime: Time, checkOutLat: number, checkOutLng: number): Promise<void>;
     removeWork(workId: string): Promise<void>;
     removeWorker(employeeId: string): Promise<void>;
+    revokeMasterEntryPermission(user: Principal): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateWork(workId: string, updatedWork: Work): Promise<void>;
     updateWorker(employeeId: string, updatedWorker: Worker): Promise<void>;

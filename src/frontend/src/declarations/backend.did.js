@@ -40,6 +40,7 @@ export const Worker = IDL.Record({
   'village' : IDL.Text,
   'aadhaarNumber' : IDL.Text,
   'phone' : IDL.Text,
+  'bankBranchName' : IDL.Text,
 });
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
@@ -116,6 +117,12 @@ export const idlService = IDL.Service({
     ),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getMasterEntryGrantees' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+  'getRegisteredUsers' : IDL.Func(
+      [],
+      [IDL.Vec(IDL.Tuple(IDL.Principal, UserProfile))],
+      ['query'],
+    ),
   'getTodayCheckIns' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(AttendanceRecord)],
@@ -128,6 +135,8 @@ export const idlService = IDL.Service({
     ),
   'getWork' : IDL.Func([IDL.Text], [Work], ['query']),
   'getWorker' : IDL.Func([IDL.Text], [Worker], ['query']),
+  'grantMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
+  'hasMasterEntryPermission' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'recordCheckIn' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text, Time, IDL.Float64, IDL.Float64],
@@ -141,6 +150,7 @@ export const idlService = IDL.Service({
     ),
   'removeWork' : IDL.Func([IDL.Text], [], []),
   'removeWorker' : IDL.Func([IDL.Text], [], []),
+  'revokeMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'updateWork' : IDL.Func([IDL.Text, Work], [], []),
   'updateWorker' : IDL.Func([IDL.Text, Worker], [], []),
@@ -182,6 +192,7 @@ export const idlFactory = ({ IDL }) => {
     'village' : IDL.Text,
     'aadhaarNumber' : IDL.Text,
     'phone' : IDL.Text,
+    'bankBranchName' : IDL.Text,
   });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,
@@ -258,6 +269,16 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getMasterEntryGrantees' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Principal)],
+        ['query'],
+      ),
+    'getRegisteredUsers' : IDL.Func(
+        [],
+        [IDL.Vec(IDL.Tuple(IDL.Principal, UserProfile))],
+        ['query'],
+      ),
     'getTodayCheckIns' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(AttendanceRecord)],
@@ -270,6 +291,8 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getWork' : IDL.Func([IDL.Text], [Work], ['query']),
     'getWorker' : IDL.Func([IDL.Text], [Worker], ['query']),
+    'grantMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
+    'hasMasterEntryPermission' : IDL.Func([], [IDL.Bool], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'recordCheckIn' : IDL.Func(
         [
@@ -291,6 +314,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'removeWork' : IDL.Func([IDL.Text], [], []),
     'removeWorker' : IDL.Func([IDL.Text], [], []),
+    'revokeMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'updateWork' : IDL.Func([IDL.Text, Work], [], []),
     'updateWorker' : IDL.Func([IDL.Text, Worker], [], []),

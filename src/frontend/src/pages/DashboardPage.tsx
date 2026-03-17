@@ -3,6 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -10,6 +18,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -27,12 +40,16 @@ import {
   Building2,
   Calendar,
   Camera,
+  Check,
   CheckCircle2,
   ChevronRight,
+  ChevronsUpDown,
   ClipboardList,
   Clock,
   CreditCard,
   Home,
+  ImageIcon,
+  Loader2,
   LogOut,
   MapPin,
   Phone,
@@ -58,6 +75,7 @@ import {
   useGetAllWorks,
   useGetAttendanceByWork,
   useGetMasterEntryGrantees,
+  useGetMyId,
   useGetRegisteredUsers,
   useGetTodayCheckIns,
   useGrantMasterEntryPermission,
@@ -88,6 +106,11 @@ function formatCoord(lat: number, lng: number): string {
   const lngDir = lng >= 0 ? "E" : "W";
   return `${Math.abs(lat).toFixed(4)}°${latDir}, ${Math.abs(lng).toFixed(4)}°${lngDir}`;
 }
+
+const currentTimeString = () => {
+  const now = new Date();
+  return now.toTimeString().slice(0, 5); // HH:MM
+};
 
 function todayString(): string {
   return new Date().toISOString().split("T")[0];
@@ -187,8 +210,7 @@ function CameraModal({ open, title, onCapture, onClose }: CameraModalProps) {
 // ─── Tab 1: New Labour ────────────────────────────────────────────────────────
 function NewLabourTab({
   isAdmin,
-  canMasterEntry,
-}: { isAdmin: boolean; canMasterEntry: boolean }) {
+}: { isAdmin: boolean; canMasterEntry?: boolean }) {
   const { data: workers = [], isLoading } = useGetAllWorkers();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
@@ -196,13 +218,13 @@ function NewLabourTab({
 
   const [form, setForm] = useState({
     name: "",
-    employeeId: "",
     husbandFatherName: "",
     caste: "",
     village: "",
     aadhaarNumber: "",
     bankAccountNumber: "",
     bankIfsc: "",
+    bankBranchName: "",
     bankName: "",
     jobTitle: "",
     phone: "",
@@ -211,6 +233,15 @@ function NewLabourTab({
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      setPhotoPreview(URL.createObjectURL(file));
+    }
+  };
 
   const handlePhotoCapture = (file: File) => {
     setPhotoFile(file);
@@ -219,7 +250,7 @@ function NewLabourTab({
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.employeeId || !form.jobTitle) {
+    if (!form.name || !form.jobTitle) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -240,15 +271,15 @@ function NewLabourTab({
       const uploaded = await actor.uploadPhoto(blob);
       const photoId = uploaded.getDirectURL();
 
-      await addWorker.mutateAsync({
+      const generatedId = await addWorker.mutateAsync({
         name: form.name,
-        employeeId: form.employeeId,
         husbandFatherName: form.husbandFatherName,
         caste: form.caste,
         village: form.village,
         aadhaarNumber: form.aadhaarNumber,
         bankAccountNumber: form.bankAccountNumber,
         bankIfsc: form.bankIfsc,
+        bankBranchName: form.bankBranchName,
         bankName: form.bankName,
         jobTitle: form.jobTitle,
         phone: form.phone,
@@ -257,24 +288,107 @@ function NewLabourTab({
 
       setForm({
         name: "",
-        employeeId: "",
         husbandFatherName: "",
         caste: "",
         village: "",
         aadhaarNumber: "",
         bankAccountNumber: "",
         bankIfsc: "",
+        bankBranchName: "",
         bankName: "",
         jobTitle: "",
         phone: "",
       });
       setPhotoFile(null);
       setPhotoPreview(null);
-      toast.success("Worker registered successfully!");
+      toast.success(
+        `Worker registered! Employee ID: ${generatedId || "assigned"}`,
+      );
     } catch (e: any) {
       toast.error(e?.message || "Failed to register worker");
     } finally {
       setUploading(false);
+    }
+  };
+
+  const INDIAN_BANKS = [
+    "State Bank of India",
+    "Bank of Baroda",
+    "Bank of India",
+    "Bank of Maharashtra",
+    "Canara Bank",
+    "Central Bank of India",
+    "Indian Bank",
+    "Indian Overseas Bank",
+    "Punjab & Sind Bank",
+    "Punjab National Bank",
+    "UCO Bank",
+    "Union Bank of India",
+    "HDFC Bank",
+    "ICICI Bank",
+    "Axis Bank",
+    "Kotak Mahindra Bank",
+    "IndusInd Bank",
+    "Yes Bank",
+    "IDBI Bank",
+    "Federal Bank",
+    "South Indian Bank",
+    "Karur Vysya Bank",
+    "City Union Bank",
+    "Tamilnad Mercantile Bank",
+    "Dhanlaxmi Bank",
+    "RBL Bank",
+    "Bandhan Bank",
+    "AU Small Finance Bank",
+    "Equitas Small Finance Bank",
+    "ESAF Small Finance Bank",
+    "Jana Small Finance Bank",
+    "Suryoday Small Finance Bank",
+    "Ujjivan Small Finance Bank",
+    "Utkarsh Small Finance Bank",
+    "IDFC First Bank",
+    "CSB Bank",
+    "DCB Bank",
+    "Jammu & Kashmir Bank",
+    "Nainital Bank",
+    "Lakshmi Vilas Bank",
+    "Karnataka Bank",
+    "Saraswat Bank",
+    "Abhyudaya Bank",
+  ];
+
+  const [bankSearchOpen, setBankSearchOpen] = useState(false);
+  const [bankSearch, setBankSearch] = useState("");
+  const filteredBanks = INDIAN_BANKS.filter((b) =>
+    b.toLowerCase().includes(bankSearch.toLowerCase()),
+  );
+
+  const [ifscLookingUp, setIfscLookingUp] = useState(false);
+
+  const handleIfscChange = async (value: string) => {
+    const upper = value.toUpperCase();
+    setForm((p) => ({ ...p, bankIfsc: upper, bankBranchName: "" }));
+    if (upper.length === 11) {
+      setIfscLookingUp(true);
+      try {
+        const res = await fetch(`https://ifsc.razorpay.com/${upper}`);
+        if (res.ok) {
+          const data = await res.json();
+          setForm((p) => ({ ...p, bankBranchName: data.BRANCH || "" }));
+          if (data.BANK) {
+            const matched = INDIAN_BANKS.find(
+              (b) =>
+                b.toLowerCase().includes(data.BANK.toLowerCase()) ||
+                data.BANK.toLowerCase().includes(b.toLowerCase().split(" ")[0]),
+            );
+            if (matched) setForm((p) => ({ ...p, bankName: matched }));
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIfscLookingUp(false);
+      }
     }
   };
 
@@ -310,115 +424,208 @@ function NewLabourTab({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!canMasterEntry && (
-            <div className="p-3 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground text-center">
-              Master Entry permission required to register workers.
+          <>
+            {/* Personal Details Section */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" /> Personal Details
+              </p>
+              {field("name", "Full Name", "e.g. Ramesh Kumar", true)}
+              {field(
+                "husbandFatherName",
+                "Husband's / Father's Name",
+                "e.g. Suresh Kumar",
+              )}
+              {field("caste", "Caste", "e.g. General / OBC / SC / ST")}
+              {field("village", "Village", "e.g. Rampur, District Agra")}
+              {field("jobTitle", "Job Title", "e.g. Mason", true)}
+              {field("phone", "Phone Number", "e.g. +91 98765 43210")}
             </div>
-          )}
-          {canMasterEntry && (
-            <>
-              {/* Personal Details Section */}
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" /> Personal Details
-                </p>
-                {field("name", "Full Name", "e.g. Ramesh Kumar", true)}
-                {field("employeeId", "Employee ID", "e.g. EMP001", true)}
-                {field(
-                  "husbandFatherName",
-                  "Husband's / Father's Name",
-                  "e.g. Suresh Kumar",
-                )}
-                {field("caste", "Caste", "e.g. General / OBC / SC / ST")}
-                {field("village", "Village", "e.g. Rampur, District Agra")}
-                {field("jobTitle", "Job Title", "e.g. Mason", true)}
-                {field("phone", "Phone Number", "e.g. +91 98765 43210")}
-              </div>
 
-              <Separator />
+            <Separator />
 
-              {/* Identity & Bank Section */}
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5" /> Identity &amp; Bank
-                  Details
-                </p>
-                {field(
-                  "aadhaarNumber",
-                  "Aadhaar Number",
-                  "12-digit number",
-                  false,
-                  "text",
-                )}
-                {field(
-                  "bankAccountNumber",
-                  "Bank Account Number",
-                  "e.g. 0123456789",
-                )}
-                {field("bankIfsc", "IFSC Code", "e.g. SBIN0001234")}
-                {field("bankName", "Bank Name", "e.g. State Bank of India")}
-              </div>
-
-              <Separator />
-
-              {/* Photo Section */}
+            {/* Identity & Bank Section */}
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                <CreditCard className="w-3.5 h-3.5" /> Identity &amp; Bank
+                Details
+              </p>
+              {field(
+                "aadhaarNumber",
+                "Aadhaar Number",
+                "12-digit number",
+                false,
+                "text",
+              )}
+              {field(
+                "bankAccountNumber",
+                "Bank Account Number",
+                "e.g. 0123456789",
+              )}
+              {/* IFSC Code with auto-lookup */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Enrollment Photo
-                  <span className="text-destructive ml-0.5">*</span>
+                  IFSC Code
                 </Label>
-                {photoPreview ? (
-                  <div className="relative">
-                    <img
-                      src={photoPreview}
-                      alt="Preview"
-                      className="w-full aspect-video object-cover rounded-lg border border-border"
-                    />
+                <div className="relative">
+                  <Input
+                    value={form.bankIfsc}
+                    onChange={(e) => handleIfscChange(e.target.value)}
+                    placeholder="e.g. SBIN0001234"
+                    maxLength={11}
+                    className="bg-secondary border-border text-foreground uppercase pr-24"
+                    data-ocid="labour.bankIfsc.input"
+                  />
+                  {ifscLookingUp && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Looking up...
+                    </span>
+                  )}
+                </div>
+              </div>
+              {/* Branch Name — auto-filled from IFSC */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Branch Name{" "}
+                  <span className="text-muted-foreground/60 normal-case">
+                    (auto-filled)
+                  </span>
+                </Label>
+                <Input
+                  value={form.bankBranchName}
+                  readOnly
+                  placeholder="Auto-populated from IFSC"
+                  className="bg-secondary/50 border-border text-foreground cursor-not-allowed opacity-70"
+                  data-ocid="labour.bankBranchName.input"
+                />
+              </div>
+              {/* Bank Name searchable combobox */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Bank Name
+                </Label>
+                <Popover open={bankSearchOpen} onOpenChange={setBankSearchOpen}>
+                  <PopoverTrigger asChild>
                     <Button
-                      size="sm"
                       variant="outline"
-                      className="absolute top-2 right-2 h-7 w-7 p-0"
-                      onClick={() => {
-                        setPhotoFile(null);
-                        setPhotoPreview(null);
-                      }}
-                      data-ocid="labour.photo.delete_button"
+                      className="w-full justify-between bg-secondary border-border text-foreground font-normal"
+                      data-ocid="labour.bankName.select"
                     >
-                      <X className="w-3 h-3" />
+                      {form.bankName || "Select a bank..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
-                  </div>
-                ) : (
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search bank..."
+                        value={bankSearch}
+                        onValueChange={setBankSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No bank found.</CommandEmpty>
+                        <CommandGroup>
+                          {filteredBanks.map((bank) => (
+                            <CommandItem
+                              key={bank}
+                              value={bank}
+                              onSelect={() => {
+                                setForm((p) => ({ ...p, bankName: bank }));
+                                setBankSearchOpen(false);
+                                setBankSearch("");
+                              }}
+                            >
+                              <Check
+                                className={`mr-2 h-4 w-4 ${form.bankName === bank ? "opacity-100" : "opacity-0"}`}
+                              />
+                              {bank}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Photo Section */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Enrollment Photo
+                <span className="text-destructive ml-0.5">*</span>
+              </Label>
+              {photoPreview ? (
+                <div className="relative">
+                  <img
+                    src={photoPreview}
+                    alt="Preview"
+                    className="w-full aspect-video object-cover rounded-lg border border-border"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="absolute top-2 right-2 h-7 w-7 p-0"
+                    onClick={() => {
+                      setPhotoFile(null);
+                      setPhotoPreview(null);
+                    }}
+                    data-ocid="labour.photo.delete_button"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    className="w-full h-24 border-dashed border-border flex flex-col gap-1 text-muted-foreground"
+                    className="flex-1 h-24 border-dashed border-border flex flex-col gap-1 text-muted-foreground"
                     onClick={() => setCameraOpen(true)}
                     data-ocid="labour.photo.upload_button"
                   >
                     <Camera className="w-6 h-6" />
-                    <span className="text-xs">Tap to capture photo</span>
+                    <span className="text-xs">Take Photo</span>
                   </Button>
-                )}
-              </div>
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-24 border-dashed border-border flex flex-col gap-1 text-muted-foreground"
+                    onClick={() => galleryInputRef.current?.click()}
+                    data-ocid="labour.photo.secondary_button"
+                  >
+                    <ImageIcon className="w-6 h-6" />
+                    <span className="text-xs">From Gallery</span>
+                  </Button>
+                </div>
+              )}
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleGallerySelect}
+              />
+            </div>
 
-              <Button
-                className="w-full bg-primary text-primary-foreground font-semibold"
-                onClick={handleSubmit}
-                disabled={addWorker.isPending || uploading}
-                data-ocid="labour.submit_button"
-              >
-                {addWorker.isPending || uploading ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />{" "}
-                    Registering...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Register Worker
-                  </span>
-                )}
-              </Button>
-            </>
-          )}
+            <Button
+              className="w-full bg-primary text-primary-foreground font-semibold"
+              onClick={handleSubmit}
+              disabled={addWorker.isPending || uploading}
+              data-ocid="labour.submit_button"
+            >
+              {addWorker.isPending || uploading ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />{" "}
+                  Registering...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" /> Register Worker
+                </span>
+              )}
+            </Button>
+          </>
         </CardContent>
       </Card>
 
@@ -640,12 +847,14 @@ function WorksTab({
   const removeWork = useRemoveWork();
 
   const [worksView, setWorksView] = useState<"form" | "list">("form");
+  const [locationLoading, setLocationLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
     category: "",
     jobTitle: "",
     locationDescription: "",
     date: todayString(),
+    time: currentTimeString(),
   });
 
   // Once works load, if there are existing works, default to list view
@@ -654,6 +863,29 @@ function WorksTab({
       setWorksView(works.length > 0 ? "list" : "form");
     }
   }, [isLoading, works.length]);
+
+  // Auto-capture location, date, time when form opens
+  useEffect(() => {
+    if (worksView === "form") {
+      setForm((p) => ({
+        ...p,
+        date: todayString(),
+        time: currentTimeString(),
+      }));
+      setLocationLoading(true);
+      getGPS()
+        .then(({ lat, lng }) => {
+          setForm((p) => ({
+            ...p,
+            locationDescription: `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`,
+          }));
+        })
+        .catch(() => {
+          // GPS failed silently — user can type manually
+        })
+        .finally(() => setLocationLoading(false));
+    }
+  }, [worksView]);
 
   const WORK_CATEGORIES = [
     "Road Construction",
@@ -684,6 +916,7 @@ function WorksTab({
         jobTitle: "",
         locationDescription: "",
         date: todayString(),
+        time: currentTimeString(),
       });
       setWorksView("list");
       toast.success("Work added!");
@@ -778,8 +1011,8 @@ function WorksTab({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    Location *
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <MapPin className="w-3 h-3" /> Location *
                   </Label>
                   <Input
                     value={form.locationDescription}
@@ -789,15 +1022,25 @@ function WorksTab({
                         locationDescription: e.target.value,
                       }))
                     }
-                    placeholder="e.g. NH-48, Near Toll Plaza"
+                    placeholder={
+                      locationLoading
+                        ? "Detecting location..."
+                        : "e.g. NH-48, Near Toll Plaza"
+                    }
                     className="bg-secondary"
                     data-ocid="works.location.input"
                   />
+                  {locationLoading && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                      <span className="inline-block w-2.5 h-2.5 border border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                      Detecting location…
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">
-                    Date *
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3" /> Date *
                   </Label>
                   <Input
                     type="date"
@@ -807,6 +1050,21 @@ function WorksTab({
                     }
                     className="bg-secondary"
                     data-ocid="works.date.input"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" /> Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={form.time}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, time: e.target.value }))
+                    }
+                    className="bg-secondary"
+                    data-ocid="works.time.input"
                   />
                 </div>
 
@@ -834,15 +1092,13 @@ function WorksTab({
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                 <Briefcase className="w-4 h-4" /> Works ({works.length})
               </h3>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  onClick={() => setWorksView("form")}
-                  data-ocid="works.add_new.button"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add New Work
-                </Button>
-              )}
+              <Button
+                size="sm"
+                onClick={() => setWorksView("form")}
+                data-ocid="works.add_new.button"
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" /> Add New Work
+              </Button>
             </div>
 
             {isLoading && (
@@ -992,6 +1248,11 @@ function AttendanceTab({
   const [results, setResults] = useState<Record<string, "success" | "error">>(
     {},
   );
+  const [verifyDialog, setVerifyDialog] = useState<{
+    open: boolean;
+    photoFile: File | null;
+    previewUrl: string;
+  }>({ open: false, photoFile: null, previewUrl: "" });
 
   const toggleWorker = (id: string) => {
     setSelectedWorkerIds((prev) => {
@@ -1021,15 +1282,22 @@ function AttendanceTab({
     setCameraOpen(true);
   };
 
-  const handlePhotoForCurrentWorker = async (file: File) => {
-    if (!actor || !selectedWorkId) return;
-    const workerId = flowQueue[flowIndex];
-    setProcessing(true);
+  const handlePhotoForCurrentWorker = (file: File) => {
     setCameraOpen(false);
+    const previewUrl = URL.createObjectURL(file);
+    setVerifyDialog({ open: true, photoFile: file, previewUrl });
+  };
+
+  const confirmCheckIn = async () => {
+    const { photoFile } = verifyDialog;
+    if (!actor || !selectedWorkId || !photoFile) return;
+    const workerId = flowQueue[flowIndex];
+    setVerifyDialog({ open: false, photoFile: null, previewUrl: "" });
+    setProcessing(true);
     try {
       const [gps, bytes] = await Promise.all([
         getGPS().catch(() => ({ lat: 0, lng: 0 })),
-        file.arrayBuffer().then((ab) => new Uint8Array(ab)),
+        photoFile.arrayBuffer().then((ab) => new Uint8Array(ab)),
       ]);
       const blob = ExternalBlob.fromBytes(bytes);
       const uploaded = await actor.uploadPhoto(blob);
@@ -1062,6 +1330,11 @@ function AttendanceTab({
         setFlow("done");
       }
     }
+  };
+
+  const rejectCheckIn = () => {
+    setVerifyDialog({ open: false, photoFile: null, previewUrl: "" });
+    setCameraOpen(true);
   };
 
   const currentFlowWorker =
@@ -1271,6 +1544,81 @@ function AttendanceTab({
           }}
         />
       )}
+
+      {/* Identity Verification Dialog */}
+      <Dialog open={verifyDialog.open} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-lg"
+          data-ocid="attendance.verify.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" /> Verify Identity
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Compare the enrolled photo with today's captured photo before
+            confirming attendance.
+          </p>
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-center text-muted-foreground uppercase tracking-wide">
+                Enrolled Photo
+              </p>
+              {currentFlowWorker?.enrollmentPhotoId ? (
+                <img
+                  src={currentFlowWorker.enrollmentPhotoId}
+                  alt="Enrolled"
+                  className="w-full aspect-square object-cover rounded-lg border border-border"
+                />
+              ) : (
+                <div className="w-full aspect-square rounded-lg border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground">
+                  No photo
+                </div>
+              )}
+              <p className="text-xs text-center font-medium truncate">
+                {currentFlowWorker?.name}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-center text-muted-foreground uppercase tracking-wide">
+                Today's Photo
+              </p>
+              {verifyDialog.previewUrl && (
+                <img
+                  src={verifyDialog.previewUrl}
+                  alt="Today"
+                  className="w-full aspect-square object-cover rounded-lg border border-border"
+                />
+              )}
+            </div>
+          </div>
+          <div className="flex gap-3 mt-2">
+            <Button
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold"
+              onClick={confirmCheckIn}
+              disabled={processing}
+              data-ocid="attendance.verify.confirm_button"
+            >
+              {processing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+              )}
+              Confirm Match
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 font-semibold"
+              onClick={rejectCheckIn}
+              disabled={processing}
+              data-ocid="attendance.verify.cancel_button"
+            >
+              <X className="w-4 h-4 mr-2" /> Reject / Retake
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1647,7 +1995,8 @@ export default function DashboardPage() {
   const { clear, identity } = useInternetIdentity();
   const navigate = useNavigate();
   const { data: isAdmin = false, isLoading: adminLoading } = useIsCallerAdmin();
-  const { data: canMasterEntry = false } = useHasMasterEntryPermission();
+  const { data: myId = "" } = useGetMyId();
+
   const [activeTab, setActiveTab] = useState("labour");
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
 
@@ -1677,9 +2026,16 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="text-sm font-bold leading-none">AttendTrack</h1>
-              <p className="text-xs text-muted-foreground">
-                {isAdmin ? "Admin" : "Worker"}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-muted-foreground">
+                  {isAdmin ? "Admin" : "Worker"}
+                </p>
+                {myId && myId !== "USR" && (
+                  <span className="text-xs font-mono bg-primary/20 text-primary px-1.5 py-0.5 rounded-sm border border-primary/30">
+                    {myId}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <Button
@@ -1739,7 +2095,7 @@ export default function DashboardPage() {
           </TabsList>
 
           <TabsContent value="labour">
-            <NewLabourTab isAdmin={isAdmin} canMasterEntry={canMasterEntry} />
+            <NewLabourTab isAdmin={isAdmin} canMasterEntry={true} />
           </TabsContent>
           <TabsContent value="works">
             <WorksTab

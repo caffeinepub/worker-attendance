@@ -35,6 +35,7 @@ const emptyWorker: Worker = {
   bankAccountNumber: "",
   bankIfsc: "",
   bankName: "",
+  bankBranchName: "",
   enrollmentPhotoId: "",
 };
 

@@ -50,6 +50,7 @@ export interface Worker {
   'village' : string,
   'aadhaarNumber' : string,
   'phone' : string,
+  'bankBranchName' : string,
 }
 export interface _CaffeineStorageCreateCertificateResult {
   'method' : string,
@@ -89,10 +90,14 @@ export interface _SERVICE {
   'getAttendanceByWorker' : ActorMethod<[string], Array<AttendanceRecord>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getMasterEntryGrantees' : ActorMethod<[], Array<Principal>>,
+  'getRegisteredUsers' : ActorMethod<[], Array<[Principal, UserProfile]>>,
   'getTodayCheckIns' : ActorMethod<[string], Array<AttendanceRecord>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWork' : ActorMethod<[string], Work>,
   'getWorker' : ActorMethod<[string], Worker>,
+  'grantMasterEntryPermission' : ActorMethod<[Principal], undefined>,
+  'hasMasterEntryPermission' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'recordCheckIn' : ActorMethod<
     [string, string, string, string, Time, number, number],
@@ -104,6 +109,7 @@ export interface _SERVICE {
   >,
   'removeWork' : ActorMethod<[string], undefined>,
   'removeWorker' : ActorMethod<[string], undefined>,
+  'revokeMasterEntryPermission' : ActorMethod<[Principal], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateWork' : ActorMethod<[string, Work], undefined>,
   'updateWorker' : ActorMethod<[string, Worker], undefined>,
