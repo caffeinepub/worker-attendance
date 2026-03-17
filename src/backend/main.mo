@@ -13,9 +13,9 @@ import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
 import AccessControl "authorization/access-control";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   // Mixin authorization and storage components
   let accessControlState = AccessControl.initState();
@@ -40,10 +40,16 @@ actor {
     };
   };
 
-  type Worker = {
+  public type Worker = {
     name : Text;
+    husbandFatherName : Text;
+    caste : Text;
+    village : Text;
+    aadhaarNumber : Text;
+    bankAccountNumber : Text;
+    bankIfsc : Text;
+    bankName : Text;
     employeeId : Text;
-    department : Text;
     jobTitle : Text;
     phone : Text;
     enrollmentPhotoId : Text;
@@ -52,6 +58,8 @@ actor {
   public type Work = {
     workId : Text;
     name : Text;
+    category : Text;
+    jobTitle : Text;
     locationDescription : Text;
     date : Text;
   };
@@ -81,6 +89,17 @@ actor {
   let userProfiles = Map.empty<Principal, UserProfile>();
   // Map from employeeId to Principal for ownership verification
   let workerOwnership = Map.empty<Text, Principal>();
+  // Set of principals granted Master Entry permission
+  let masterEntryGrantees = Map.empty<Principal, Bool>();
+
+  // Helper: check if a principal has Master Entry permission
+  func hasMasterEntryPerm(p : Principal) : Bool {
+    if (AccessControl.isAdmin(accessControlState, p)) return true;
+    switch (masterEntryGrantees.get(p)) {
+      case (?v) { v };
+      case (null) { false };
+    };
+  };
 
   // Helper function to check if caller can manage attendance for a worker
   func canManageWorkerAttendance(caller : Principal, workerId : Text) : Bool {
@@ -93,6 +112,14 @@ actor {
     switch (workerOwnership.get(workerId)) {
       case (?owner) { owner == caller };
       case (null) { false };
+    };
+  };
+
+  // Helper function to get caller's worker ID
+  func getCallerWorkerId(caller : Principal) : ?Text {
+    switch (userProfiles.get(caller)) {
+      case (?profile) { profile.employeeId };
+      case (null) { null };
     };
   };
 
@@ -128,10 +155,50 @@ actor {
     };
   };
 
-  // Worker Management (Admin only)
-  public shared ({ caller }) func addWorker(worker : Worker) : async () {
+  // Master Entry Permission Management
+  public query ({ caller }) func hasMasterEntryPermission() : async Bool {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      return false;
+    };
+    hasMasterEntryPerm(caller);
+  };
+
+  public shared ({ caller }) func grantMasterEntryPermission(user : Principal) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized: Only admins can manage workers");
+      Runtime.trap("Unauthorized: Only admins can grant Master Entry permission");
+    };
+    masterEntryGrantees.add(user, true);
+  };
+
+  public shared ({ caller }) func revokeMasterEntryPermission(user : Principal) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can revoke Master Entry permission");
+    };
+    masterEntryGrantees.remove(user);
+  };
+
+  public query ({ caller }) func getMasterEntryGrantees() : async [Principal] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can view Master Entry grantees");
+    };
+    let result = List.empty<Principal>();
+    for ((p, granted) in masterEntryGrantees.entries()) {
+      if (granted) { result.add(p) };
+    };
+    result.toArray();
+  };
+
+  public query ({ caller }) func getRegisteredUsers() : async [(Principal, UserProfile)] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can list registered users");
+    };
+    userProfiles.entries().toArray();
+  };
+
+  // Worker Management (Admin or Master Entry grantee)
+  public shared ({ caller }) func addWorker(worker : Worker) : async () {
+    if (not hasMasterEntryPerm(caller)) {
+      Runtime.trap("Unauthorized: Master Entry permission required");
     };
     if (workers.containsKey(worker.employeeId)) {
       Runtime.trap("Worker already exists");
@@ -285,10 +352,20 @@ actor {
       Runtime.trap("Unauthorized: Only authenticated users can view attendance");
     };
 
+    // Admins can view all attendance for any work
+    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
+    let callerWorkerId = getCallerWorkerId(caller);
+
     let matchingRecords = List.empty<AttendanceRecord>();
     for ((recordId, record) in attendanceRecords.entries()) {
       if (record.workId == workId) {
-        matchingRecords.add(record);
+        // Allow if admin or if this is the caller's own attendance record
+        if (isAdmin or (switch (callerWorkerId) {
+          case (?wId) { wId == record.workerId };
+          case (null) { false };
+        })) {
+          matchingRecords.add(record);
+        };
       };
     };
     matchingRecords.toArray().sort();
@@ -333,11 +410,21 @@ actor {
       Runtime.trap("Unauthorized: Only authenticated users can view today's check-ins");
     };
 
+    // Admins can view all today's check-ins
+    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
+    let callerWorkerId = getCallerWorkerId(caller);
+
     let todayRecords = List.empty<AttendanceRecord>();
     for ((recordId, record) in attendanceRecords.entries()) {
       let timestampText = record.checkInTime.toText();
       if (timestampText.contains(#text today) and record.checkOutTime == null) {
-        todayRecords.add(record);
+        // Allow if admin or if this is the caller's own attendance record
+        if (isAdmin or (switch (callerWorkerId) {
+          case (?wId) { wId == record.workerId };
+          case (null) { false };
+        })) {
+          todayRecords.add(record);
+        };
       };
     };
     todayRecords.toArray().sort();

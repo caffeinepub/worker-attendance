@@ -23,15 +23,23 @@ export const Work = IDL.Record({
   'date' : IDL.Text,
   'name' : IDL.Text,
   'locationDescription' : IDL.Text,
+  'jobTitle' : IDL.Text,
+  'category' : IDL.Text,
   'workId' : IDL.Text,
 });
 export const Worker = IDL.Record({
+  'bankAccountNumber' : IDL.Text,
+  'husbandFatherName' : IDL.Text,
   'enrollmentPhotoId' : IDL.Text,
+  'caste' : IDL.Text,
   'name' : IDL.Text,
+  'bankIfsc' : IDL.Text,
+  'bankName' : IDL.Text,
   'jobTitle' : IDL.Text,
   'employeeId' : IDL.Text,
+  'village' : IDL.Text,
+  'aadhaarNumber' : IDL.Text,
   'phone' : IDL.Text,
-  'department' : IDL.Text,
 });
 export const UserRole = IDL.Variant({
   'admin' : IDL.Null,
@@ -157,15 +165,23 @@ export const idlFactory = ({ IDL }) => {
     'date' : IDL.Text,
     'name' : IDL.Text,
     'locationDescription' : IDL.Text,
+    'jobTitle' : IDL.Text,
+    'category' : IDL.Text,
     'workId' : IDL.Text,
   });
   const Worker = IDL.Record({
+    'bankAccountNumber' : IDL.Text,
+    'husbandFatherName' : IDL.Text,
     'enrollmentPhotoId' : IDL.Text,
+    'caste' : IDL.Text,
     'name' : IDL.Text,
+    'bankIfsc' : IDL.Text,
+    'bankName' : IDL.Text,
     'jobTitle' : IDL.Text,
     'employeeId' : IDL.Text,
+    'village' : IDL.Text,
+    'aadhaarNumber' : IDL.Text,
     'phone' : IDL.Text,
-    'department' : IDL.Text,
   });
   const UserRole = IDL.Variant({
     'admin' : IDL.Null,

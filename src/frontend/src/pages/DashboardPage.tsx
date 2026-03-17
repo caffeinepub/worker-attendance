@@ -31,10 +31,13 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  CreditCard,
+  Home,
   LogOut,
   MapPin,
   Phone,
   Plus,
+  Shield,
   Trash2,
   User,
   UserPlus,
@@ -54,12 +57,17 @@ import {
   useGetAllWorkers,
   useGetAllWorks,
   useGetAttendanceByWork,
+  useGetMasterEntryGrantees,
+  useGetRegisteredUsers,
   useGetTodayCheckIns,
+  useGrantMasterEntryPermission,
+  useHasMasterEntryPermission,
   useIsCallerAdmin,
   useRecordCheckIn,
   useRecordCheckOut,
   useRemoveWork,
   useRemoveWorker,
+  useRevokeMasterEntryPermission,
 } from "../hooks/useQueries";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,7 +143,7 @@ function CameraModal({ open, title, onCapture, onClose }: CameraModalProps) {
           <DialogTitle className="text-sm font-semibold">{title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="camera-preview-wrapper">
+          <div className="camera-preview-wrap relative bg-black rounded-lg overflow-hidden aspect-video">
             <video
               ref={cam.videoRef}
               autoPlay
@@ -177,7 +185,10 @@ function CameraModal({ open, title, onCapture, onClose }: CameraModalProps) {
 }
 
 // ─── Tab 1: New Labour ────────────────────────────────────────────────────────
-function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
+function NewLabourTab({
+  isAdmin,
+  canMasterEntry,
+}: { isAdmin: boolean; canMasterEntry: boolean }) {
   const { data: workers = [], isLoading } = useGetAllWorkers();
   const addWorker = useAddWorker();
   const removeWorker = useRemoveWorker();
@@ -186,7 +197,13 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
   const [form, setForm] = useState({
     name: "",
     employeeId: "",
-    department: "",
+    husbandFatherName: "",
+    caste: "",
+    village: "",
+    aadhaarNumber: "",
+    bankAccountNumber: "",
+    bankIfsc: "",
+    bankName: "",
     jobTitle: "",
     phone: "",
   });
@@ -202,8 +219,12 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.employeeId || !form.department || !form.jobTitle) {
+    if (!form.name || !form.employeeId || !form.jobTitle) {
       toast.error("Please fill all required fields");
+      return;
+    }
+    if (form.aadhaarNumber && !/^\d{12}$/.test(form.aadhaarNumber)) {
+      toast.error("Aadhaar number must be exactly 12 digits");
       return;
     }
     if (!photoFile) {
@@ -222,7 +243,13 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
       await addWorker.mutateAsync({
         name: form.name,
         employeeId: form.employeeId,
-        department: form.department,
+        husbandFatherName: form.husbandFatherName,
+        caste: form.caste,
+        village: form.village,
+        aadhaarNumber: form.aadhaarNumber,
+        bankAccountNumber: form.bankAccountNumber,
+        bankIfsc: form.bankIfsc,
+        bankName: form.bankName,
         jobTitle: form.jobTitle,
         phone: form.phone,
         enrollmentPhotoId: photoId,
@@ -231,7 +258,13 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
       setForm({
         name: "",
         employeeId: "",
-        department: "",
+        husbandFatherName: "",
+        caste: "",
+        village: "",
+        aadhaarNumber: "",
+        bankAccountNumber: "",
+        bankIfsc: "",
+        bankName: "",
         jobTitle: "",
         phone: "",
       });
@@ -249,7 +282,8 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
     key: keyof typeof form,
     label: string,
     placeholder: string,
-    required = true,
+    required = false,
+    type = "text",
   ) => (
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -257,6 +291,7 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
         {required && <span className="text-destructive ml-0.5">*</span>}
       </Label>
       <Input
+        type={type}
         value={form[key]}
         onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
         placeholder={placeholder}
@@ -271,23 +306,62 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
       <Card className="border-border">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <UserPlus className="w-4 h-4" /> Register New Labour
+            <UserPlus className="w-4 h-4" /> Master Entry — Register New Labour
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isAdmin && (
+          {!canMasterEntry && (
             <div className="p-3 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground text-center">
-              Admin access required to register workers.
+              Master Entry permission required to register workers.
             </div>
           )}
-          {isAdmin && (
+          {canMasterEntry && (
             <>
-              {field("name", "Full Name", "e.g. Ramesh Kumar")}
-              {field("employeeId", "Employee ID", "e.g. EMP001")}
-              {field("department", "Department", "e.g. Civil")}
-              {field("jobTitle", "Job Title", "e.g. Mason")}
-              {field("phone", "Phone Number", "e.g. +91 98765 43210", false)}
+              {/* Personal Details Section */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" /> Personal Details
+                </p>
+                {field("name", "Full Name", "e.g. Ramesh Kumar", true)}
+                {field("employeeId", "Employee ID", "e.g. EMP001", true)}
+                {field(
+                  "husbandFatherName",
+                  "Husband's / Father's Name",
+                  "e.g. Suresh Kumar",
+                )}
+                {field("caste", "Caste", "e.g. General / OBC / SC / ST")}
+                {field("village", "Village", "e.g. Rampur, District Agra")}
+                {field("jobTitle", "Job Title", "e.g. Mason", true)}
+                {field("phone", "Phone Number", "e.g. +91 98765 43210")}
+              </div>
 
+              <Separator />
+
+              {/* Identity & Bank Section */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5" /> Identity &amp; Bank
+                  Details
+                </p>
+                {field(
+                  "aadhaarNumber",
+                  "Aadhaar Number",
+                  "12-digit number",
+                  false,
+                  "text",
+                )}
+                {field(
+                  "bankAccountNumber",
+                  "Bank Account Number",
+                  "e.g. 0123456789",
+                )}
+                {field("bankIfsc", "IFSC Code", "e.g. SBIN0001234")}
+                {field("bankName", "Bank Name", "e.g. State Bank of India")}
+              </div>
+
+              <Separator />
+
+              {/* Photo Section */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Enrollment Photo
@@ -396,11 +470,18 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate">{w.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {w.employeeId} · {w.department}
+                      {w.employeeId} · {w.jobTitle}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {w.jobTitle}
-                    </p>
+                    {w.husbandFatherName && (
+                      <p className="text-xs text-muted-foreground">
+                        S/o {w.husbandFatherName}
+                      </p>
+                    )}
+                    {w.village && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Home className="w-3 h-3" /> {w.village}
+                      </p>
+                    )}
                   </div>
                   {isAdmin && (
                     <Button
@@ -426,7 +507,121 @@ function NewLabourTab({ isAdmin }: { isAdmin: boolean }) {
         onCapture={handlePhotoCapture}
         onClose={() => setCameraOpen(false)}
       />
+
+      {isAdmin && <MasterEntryAccessPanel />}
     </div>
+  );
+}
+
+// ─── Master Entry Access Panel ────────────────────────────────────────────────
+function MasterEntryAccessPanel() {
+  const { data: registeredUsers = [] } = useGetRegisteredUsers();
+  const { data: grantees = [] } = useGetMasterEntryGrantees();
+  const grantMutation = useGrantMasterEntryPermission();
+  const revokeMutation = useRevokeMasterEntryPermission();
+
+  const granteeSet = new Set(grantees.map((p) => p.toString()));
+
+  const handleGrant = async (
+    principal: import("@icp-sdk/core/principal").Principal,
+    name: string,
+  ) => {
+    try {
+      await grantMutation.mutateAsync(principal);
+      toast.success(`Master Entry granted to ${name}`);
+    } catch {
+      toast.error("Failed to grant permission");
+    }
+  };
+
+  const handleRevoke = async (
+    principal: import("@icp-sdk/core/principal").Principal,
+    name: string,
+  ) => {
+    try {
+      await revokeMutation.mutateAsync(principal);
+      toast.success(`Master Entry revoked from ${name}`);
+    } catch {
+      toast.error("Failed to revoke permission");
+    }
+  };
+
+  return (
+    <Card className="border-border mt-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-bold flex items-center gap-2">
+          <Shield className="w-4 h-4 text-primary" /> Master Entry Access —
+          Manage Permissions
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {registeredUsers.length === 0 ? (
+          <div
+            className="p-4 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground text-center"
+            data-ocid="master-entry-access.empty_state"
+          >
+            No registered users found.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {registeredUsers.map(([principal, profile], idx) => {
+              const principalStr = principal.toString();
+              const hasGrant = granteeSet.has(principalStr);
+              const num = idx + 1;
+              return (
+                <div
+                  key={principalStr}
+                  className="flex items-center justify-between p-3 rounded-lg bg-secondary border border-border"
+                  data-ocid={`master-entry-access.item.${num}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                      <User className="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {profile.name}
+                      </p>
+                      {hasGrant && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs text-primary border-primary/40 mt-0.5"
+                        >
+                          Has Permission
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  {hasGrant ? (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-xs flex-shrink-0"
+                      onClick={() => handleRevoke(principal, profile.name)}
+                      disabled={revokeMutation.isPending}
+                      data-ocid={`master-entry-access.delete_button.${num}`}
+                    >
+                      Revoke
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-primary text-primary hover:bg-primary hover:text-primary-foreground flex-shrink-0"
+                      onClick={() => handleGrant(principal, profile.name)}
+                      disabled={grantMutation.isPending}
+                      data-ocid={`master-entry-access.grant_button.${num}`}
+                    >
+                      Grant
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -444,27 +639,53 @@ function WorksTab({
   const addWork = useAddWork();
   const removeWork = useRemoveWork();
 
-  const [showForm, setShowForm] = useState(false);
+  const [worksView, setWorksView] = useState<"form" | "list">("form");
   const [form, setForm] = useState({
     name: "",
+    category: "",
+    jobTitle: "",
     locationDescription: "",
     date: todayString(),
   });
 
+  // Once works load, if there are existing works, default to list view
+  useEffect(() => {
+    if (!isLoading) {
+      setWorksView(works.length > 0 ? "list" : "form");
+    }
+  }, [isLoading, works.length]);
+
+  const WORK_CATEGORIES = [
+    "Road Construction",
+    "Building Construction",
+    "Canal",
+    "Bridge",
+    "Drainage",
+    "Other",
+  ];
+
   const handleAddWork = async () => {
     if (!form.name || !form.locationDescription || !form.date) {
-      toast.error("Please fill all fields");
+      toast.error("Please fill all required fields");
       return;
     }
     try {
       await addWork.mutateAsync({
         workId: `work-${Date.now()}`,
         name: form.name,
+        category: form.category,
+        jobTitle: form.jobTitle,
         locationDescription: form.locationDescription,
         date: form.date,
       });
-      setForm({ name: "", locationDescription: "", date: todayString() });
-      setShowForm(false);
+      setForm({
+        name: "",
+        category: "",
+        jobTitle: "",
+        locationDescription: "",
+        date: todayString(),
+      });
+      setWorksView("list");
       toast.success("Work added!");
     } catch {
       toast.error("Failed to add work");
@@ -473,31 +694,33 @@ function WorksTab({
 
   return (
     <div className="space-y-4 page-enter">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-          <Briefcase className="w-4 h-4" /> Works ({works.length})
-        </h3>
-        {isAdmin && (
-          <Button
-            size="sm"
-            onClick={() => setShowForm((v) => !v)}
-            data-ocid="works.open_modal_button"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" /> Add Work
-          </Button>
-        )}
-      </div>
-
-      <AnimatePresence>
-        {showForm && (
+      <AnimatePresence mode="wait">
+        {worksView === "form" ? (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
+            key="form"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            data-ocid="works.form.section"
           >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <Briefcase className="w-4 h-4" /> New Work Entry
+              </h3>
+              {works.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setWorksView("list")}
+                >
+                  View Works
+                </Button>
+              )}
+            </div>
+
             <Card className="border-border">
               <CardContent className="p-4 space-y-3">
-                <h4 className="text-sm font-semibold">New Work Entry</h4>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">
                     Work Name *
@@ -512,6 +735,48 @@ function WorksTab({
                     data-ocid="works.name.input"
                   />
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    Work Category
+                  </Label>
+                  <Select
+                    value={form.category}
+                    onValueChange={(v) =>
+                      setForm((p) => ({ ...p, category: v }))
+                    }
+                  >
+                    <SelectTrigger
+                      className="bg-secondary border-border"
+                      data-ocid="works.category.select"
+                    >
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {WORK_CATEGORIES.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    Job Title
+                  </Label>
+                  <Input
+                    value={form.jobTitle}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, jobTitle: e.target.value }))
+                    }
+                    placeholder="e.g. Excavation, Plastering, Carpentry"
+                    className="bg-secondary"
+                    data-ocid="works.jobTitle.input"
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">
                     Location *
@@ -529,6 +794,7 @@ function WorksTab({
                     data-ocid="works.location.input"
                   />
                 </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">
                     Date *
@@ -543,112 +809,143 @@ function WorksTab({
                     data-ocid="works.date.input"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setShowForm(false)}
-                    data-ocid="works.cancel_button"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleAddWork}
-                    disabled={addWork.isPending}
-                    data-ocid="works.submit_button"
-                  >
-                    {addWork.isPending ? "Saving..." : "Save Work"}
-                  </Button>
-                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={handleAddWork}
+                  disabled={addWork.isPending}
+                  data-ocid="works.save.submit_button"
+                >
+                  {addWork.isPending ? "Saving..." : "Save Work"}
+                </Button>
               </CardContent>
             </Card>
           </motion.div>
+        ) : (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            data-ocid="works.list.section"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                <Briefcase className="w-4 h-4" /> Works ({works.length})
+              </h3>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  onClick={() => setWorksView("form")}
+                  data-ocid="works.add_new.button"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add New Work
+                </Button>
+              )}
+            </div>
+
+            {isLoading && (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-20 rounded-lg bg-muted animate-pulse"
+                    data-ocid="works.loading_state"
+                  />
+                ))}
+              </div>
+            )}
+
+            {!isLoading && works.length === 0 && (
+              <div
+                className="p-8 text-center text-muted-foreground text-sm border border-dashed border-border rounded-lg"
+                data-ocid="works.empty_state"
+              >
+                No works added yet. Click "Add New Work" to get started.
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {works.map((w, i) => {
+                const isSelected = selectedWorkId === w.workId;
+                return (
+                  <motion.div
+                    key={w.workId}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    data-ocid={`works.item.${i + 1}`}
+                  >
+                    <Card
+                      className={`border cursor-pointer transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                      onClick={() => onSelectWork(w.workId)}
+                    >
+                      <CardContent className="p-3 flex items-start gap-3">
+                        <div
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          <Briefcase className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{w.name}</p>
+                          {w.category && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs mb-0.5 h-5"
+                            >
+                              {w.category}
+                            </Badge>
+                          )}
+                          {w.jobTitle && (
+                            <p className="text-xs text-muted-foreground">
+                              {w.jobTitle}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3" />{" "}
+                            {w.locationDescription}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-3 h-3" /> {w.date}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {isSelected && (
+                            <Badge className="text-xs">Selected</Badge>
+                          )}
+                          {isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeWork.mutate(w.workId);
+                              }}
+                              data-ocid={`works.delete_button.${i + 1}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
-
-      {isLoading && (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-20 rounded-lg bg-muted animate-pulse"
-              data-ocid="works.loading_state"
-            />
-          ))}
-        </div>
-      )}
-      {!isLoading && works.length === 0 && (
-        <div
-          className="p-8 text-center text-muted-foreground text-sm border border-dashed border-border rounded-lg"
-          data-ocid="works.empty_state"
-        >
-          No works added yet.
-        </div>
-      )}
-      <div className="space-y-2">
-        {works.map((w, i) => {
-          const isSelected = selectedWorkId === w.workId;
-          return (
-            <motion.div
-              key={w.workId}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              data-ocid={`works.item.${i + 1}`}
-            >
-              <Card
-                className={`border cursor-pointer transition-all ${
-                  isSelected
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/50"
-                }`}
-                onClick={() => onSelectWork(w.workId)}
-              >
-                <CardContent className="p-3 flex items-start gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                      isSelected
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    <Briefcase className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{w.name}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3" /> {w.locationDescription}
-                    </p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> {w.date}
-                    </p>
-                  </div>
-                  {isSelected && (
-                    <Badge className="shrink-0 text-xs">Selected</Badge>
-                  )}
-                  {isAdmin && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeWork.mutate(w.workId);
-                      }}
-                      data-ocid={`works.delete_button.${i + 1}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -907,7 +1204,7 @@ function AttendanceTab({
                     <div className="min-w-0">
                       <p className="text-sm font-semibold">{w.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {w.department} · {w.jobTitle}
+                        {w.jobTitle}
                       </p>
                     </div>
                   </label>
@@ -945,7 +1242,7 @@ function AttendanceTab({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold">{w.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {w.department}
+                          {w.jobTitle}
                         </p>
                       </div>
                       <Badge
@@ -1005,7 +1302,13 @@ function CheckOutTab() {
     worker: {
       name: string;
       employeeId: string;
-      department: string;
+      husbandFatherName: string;
+      caste: string;
+      village: string;
+      aadhaarNumber: string;
+      bankAccountNumber: string;
+      bankIfsc: string;
+      bankName: string;
       jobTitle: string;
       phone: string;
     };
@@ -1043,13 +1346,33 @@ function CheckOutTab() {
 
       setCheckoutResult({
         record: checkoutTarget,
-        worker: worker || {
-          name: checkoutTarget.workerId,
-          employeeId: checkoutTarget.workerId,
-          department: "",
-          jobTitle: "",
-          phone: "",
-        },
+        worker: worker
+          ? {
+              name: worker.name,
+              employeeId: worker.employeeId,
+              husbandFatherName: worker.husbandFatherName,
+              caste: worker.caste,
+              village: worker.village,
+              aadhaarNumber: worker.aadhaarNumber,
+              bankAccountNumber: worker.bankAccountNumber,
+              bankIfsc: worker.bankIfsc,
+              bankName: worker.bankName,
+              jobTitle: worker.jobTitle,
+              phone: worker.phone,
+            }
+          : {
+              name: checkoutTarget.workerId,
+              employeeId: checkoutTarget.workerId,
+              husbandFatherName: "",
+              caste: "",
+              village: "",
+              aadhaarNumber: "",
+              bankAccountNumber: "",
+              bankIfsc: "",
+              bankName: "",
+              jobTitle: "",
+              phone: "",
+            },
         photoUrl: previewUrl,
         checkOutTime: now,
         checkOutLat: gps.lat,
@@ -1097,9 +1420,15 @@ function CheckOutTab() {
   const detailsText = checkoutResult
     ? `Worker: ${checkoutResult.worker.name}
 Employee ID: ${checkoutResult.worker.employeeId}
-Department: ${checkoutResult.worker.department}
-Job Title: ${checkoutResult.worker.jobTitle}
+Husband/Father: ${checkoutResult.worker.husbandFatherName || "N/A"}
+Caste: ${checkoutResult.worker.caste || "N/A"}
+Village: ${checkoutResult.worker.village || "N/A"}
+Aadhaar No.: ${checkoutResult.worker.aadhaarNumber || "N/A"}
+Job Title: ${checkoutResult.worker.jobTitle || "N/A"}
 Phone: ${checkoutResult.worker.phone || "N/A"}
+Bank Account: ${checkoutResult.worker.bankAccountNumber || "N/A"}
+IFSC: ${checkoutResult.worker.bankIfsc || "N/A"}
+Bank Name: ${checkoutResult.worker.bankName || "N/A"}
 
 Check-In Time: ${formatTime(checkoutResult.record.checkInTime)}
 Check-In Location: ${formatCoord(checkoutResult.record.checkInLat, checkoutResult.record.checkInLng)}
@@ -1186,7 +1515,7 @@ Check-Out Location: ${formatCoord(checkoutResult.checkOutLat, checkoutResult.che
                         {worker?.name || record.workerId}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {worker?.department} · {worker?.jobTitle}
+                        {worker?.jobTitle}
                       </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" /> In:{" "}
@@ -1238,70 +1567,62 @@ Check-Out Location: ${formatCoord(checkoutResult.checkOutLat, checkoutResult.che
                 <p className="text-xs text-muted-foreground font-semibold uppercase">
                   Worker
                 </p>
-                {checkoutResult.worker.employeeId &&
-                workers.find((w) => w.enrollmentPhotoId) ? (
-                  <img
-                    src={
-                      workers.find(
-                        (w) =>
-                          w.employeeId === checkoutResult.worker.employeeId,
-                      )?.enrollmentPhotoId || ""
-                    }
-                    alt="Enrollment"
-                    className="w-full aspect-square object-cover rounded-lg border border-border"
-                  />
-                ) : (
-                  <div className="w-full aspect-square bg-muted rounded-lg flex items-center justify-center">
-                    <User className="w-8 h-8 text-muted-foreground" />
-                  </div>
+                <p className="text-sm font-bold">
+                  {checkoutResult.worker.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {checkoutResult.worker.jobTitle}
+                </p>
+                {checkoutResult.worker.village && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Home className="w-3 h-3" /> {checkoutResult.worker.village}
+                  </p>
                 )}
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <Clock className="w-3 h-3" />{" "}
+                  {formatTime(checkoutResult.checkOutTime)}
+                </p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{" "}
+                  {formatCoord(
+                    checkoutResult.checkOutLat,
+                    checkoutResult.checkOutLng,
+                  )}
+                </p>
               </div>
             </div>
 
             {/* Details text box */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5" /> Full Details &amp;
-                Coordinates
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Complete Details
               </Label>
               <Textarea
-                value={detailsText}
                 readOnly
-                className="font-mono text-xs bg-secondary border-border resize-none h-52 text-foreground"
-                data-ocid="checkout.textarea"
+                value={detailsText}
+                rows={16}
+                className="bg-secondary border-border text-foreground font-mono text-xs resize-none"
+                data-ocid="checkout.details.textarea"
               />
             </div>
 
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setCheckoutResult(null);
-                  setCheckoutTarget(null);
-                }}
-                data-ocid="checkout.cancel_button"
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1 bg-primary text-primary-foreground"
-                onClick={submitCheckOut}
-                disabled={recordCheckOut.isPending}
-                data-ocid="checkout.confirm_button"
-              >
-                {recordCheckOut.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />{" "}
-                    Saving...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> Confirm Check-Out
-                  </span>
-                )}
-              </Button>
-            </div>
+            <Button
+              className="w-full bg-primary text-primary-foreground font-semibold"
+              onClick={submitCheckOut}
+              disabled={recordCheckOut.isPending}
+              data-ocid="checkout.confirm_button"
+            >
+              {recordCheckOut.isPending ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />{" "}
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" /> Confirm Check-Out
+                </span>
+              )}
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1326,6 +1647,7 @@ export default function DashboardPage() {
   const { clear, identity } = useInternetIdentity();
   const navigate = useNavigate();
   const { data: isAdmin = false, isLoading: adminLoading } = useIsCallerAdmin();
+  const { data: canMasterEntry = false } = useHasMasterEntryPermission();
   const [activeTab, setActiveTab] = useState("labour");
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
 
@@ -1417,7 +1739,7 @@ export default function DashboardPage() {
           </TabsList>
 
           <TabsContent value="labour">
-            <NewLabourTab isAdmin={isAdmin} />
+            <NewLabourTab isAdmin={isAdmin} canMasterEntry={canMasterEntry} />
           </TabsContent>
           <TabsContent value="works">
             <WorksTab
@@ -1425,7 +1747,7 @@ export default function DashboardPage() {
               selectedWorkId={selectedWorkId}
               onSelectWork={(id) => {
                 setSelectedWorkId(id);
-                toast.success("Work selected! Go to Attendance tab.");
+                setActiveTab("attendance");
               }}
             />
           </TabsContent>

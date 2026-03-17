@@ -32,15 +32,23 @@ export interface Work {
     date: string;
     name: string;
     locationDescription: string;
+    jobTitle: string;
+    category: string;
     workId: string;
 }
 export interface Worker {
+    bankAccountNumber: string;
+    husbandFatherName: string;
     enrollmentPhotoId: string;
+    caste: string;
     name: string;
+    bankIfsc: string;
+    bankName: string;
     jobTitle: string;
     employeeId: string;
+    village: string;
+    aadhaarNumber: string;
     phone: string;
-    department: string;
 }
 export interface UserProfile {
     name: string;
@@ -67,6 +75,11 @@ export interface backendInterface {
     getWork(workId: string): Promise<Work>;
     getWorker(employeeId: string): Promise<Worker>;
     isCallerAdmin(): Promise<boolean>;
+    hasMasterEntryPermission(): Promise<boolean>;
+    grantMasterEntryPermission(user: Principal): Promise<void>;
+    revokeMasterEntryPermission(user: Principal): Promise<void>;
+    getMasterEntryGrantees(): Promise<Array<Principal>>;
+    getRegisteredUsers(): Promise<Array<[Principal, UserProfile]>>;
     recordCheckIn(recordId: string, workerId: string, workId: string, checkInPhotoId: string, checkInTime: Time, checkInLat: number, checkInLng: number): Promise<void>;
     recordCheckOut(recordId: string, checkOutPhotoId: string, checkOutTime: Time, checkOutLat: number, checkOutLng: number): Promise<void>;
     removeWork(workId: string): Promise<void>;

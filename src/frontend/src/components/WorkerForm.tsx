@@ -23,6 +23,21 @@ interface WorkerFormProps {
 
 type FormValues = Worker;
 
+const emptyWorker: Worker = {
+  name: "",
+  jobTitle: "",
+  employeeId: "",
+  phone: "",
+  husbandFatherName: "",
+  caste: "",
+  village: "",
+  aadhaarNumber: "",
+  bankAccountNumber: "",
+  bankIfsc: "",
+  bankName: "",
+  enrollmentPhotoId: "",
+};
+
 export default function WorkerForm({ open, onClose, worker }: WorkerFormProps) {
   const addWorker = useAddWorker();
   const updateWorker = useUpdateWorker();
@@ -34,26 +49,12 @@ export default function WorkerForm({ open, onClose, worker }: WorkerFormProps) {
     reset,
     formState: { errors },
   } = useForm<FormValues>({
-    defaultValues: worker ?? {
-      name: "",
-      jobTitle: "",
-      employeeId: "",
-      phone: "",
-      department: "",
-    },
+    defaultValues: worker ?? emptyWorker,
   });
 
   useEffect(() => {
     if (open) {
-      reset(
-        worker ?? {
-          name: "",
-          jobTitle: "",
-          employeeId: "",
-          phone: "",
-          department: "",
-        },
-      );
+      reset(worker ?? emptyWorker);
     }
   }, [open, worker, reset]);
 
@@ -90,7 +91,7 @@ export default function WorkerForm({ open, onClose, worker }: WorkerFormProps) {
           <Field label="Full Name" error={errors.name?.message}>
             <Input
               {...register("name", { required: "Name is required" })}
-              placeholder="e.g. Juan Dela Cruz"
+              placeholder="e.g. Ramesh Kumar"
               data-ocid="worker.form.input"
             />
           </Field>
@@ -106,28 +107,82 @@ export default function WorkerForm({ open, onClose, worker }: WorkerFormProps) {
             />
           </Field>
 
-          <Field label="Job Title" error={errors.jobTitle?.message}>
+          <Field
+            label="Husband's / Father's Name"
+            error={errors.husbandFatherName?.message}
+          >
             <Input
-              {...register("jobTitle", { required: "Job title is required" })}
-              placeholder="e.g. Site Supervisor"
+              {...register("husbandFatherName")}
+              placeholder="e.g. Suresh Kumar"
               data-ocid="worker.form.input"
             />
           </Field>
 
-          <Field label="Department" error={errors.department?.message}>
+          <Field label="Caste" error={errors.caste?.message}>
             <Input
-              {...register("department", {
-                required: "Department is required",
+              {...register("caste")}
+              placeholder="e.g. General / OBC / SC / ST"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field label="Village" error={errors.village?.message}>
+            <Input
+              {...register("village")}
+              placeholder="e.g. Rampur, Agra"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field label="Aadhaar Number" error={errors.aadhaarNumber?.message}>
+            <Input
+              {...register("aadhaarNumber", {
+                pattern: { value: /^\d{0,12}$/, message: "Must be 12 digits" },
               })}
-              placeholder="e.g. Operations"
+              placeholder="12-digit Aadhaar number"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field
+            label="Bank Account Number"
+            error={errors.bankAccountNumber?.message}
+          >
+            <Input
+              {...register("bankAccountNumber")}
+              placeholder="e.g. 0123456789"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field label="IFSC Code" error={errors.bankIfsc?.message}>
+            <Input
+              {...register("bankIfsc")}
+              placeholder="e.g. SBIN0001234"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field label="Bank Name" error={errors.bankName?.message}>
+            <Input
+              {...register("bankName")}
+              placeholder="e.g. State Bank of India"
+              data-ocid="worker.form.input"
+            />
+          </Field>
+
+          <Field label="Job Title" error={errors.jobTitle?.message}>
+            <Input
+              {...register("jobTitle", { required: "Job title is required" })}
+              placeholder="e.g. Mason"
               data-ocid="worker.form.input"
             />
           </Field>
 
           <Field label="Phone Number" error={errors.phone?.message}>
             <Input
-              {...register("phone", { required: "Phone is required" })}
-              placeholder="e.g. +63 912 345 6789"
+              {...register("phone")}
+              placeholder="e.g. +91 98765 43210"
               type="tel"
               data-ocid="worker.form.input"
             />

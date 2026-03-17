@@ -114,15 +114,23 @@ export interface Work {
     date: string;
     name: string;
     locationDescription: string;
+    jobTitle: string;
+    category: string;
     workId: string;
 }
 export interface Worker {
+    bankAccountNumber: string;
+    husbandFatherName: string;
     enrollmentPhotoId: string;
+    caste: string;
     name: string;
+    bankIfsc: string;
+    bankName: string;
     jobTitle: string;
     employeeId: string;
+    village: string;
+    aadhaarNumber: string;
     phone: string;
-    department: string;
 }
 export interface UserProfile {
     name: string;

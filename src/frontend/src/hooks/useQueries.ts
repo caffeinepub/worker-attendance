@@ -236,3 +236,75 @@ export function useSaveCallerUserProfile() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["currentUserProfile"] }),
   });
 }
+
+// ─── Master Entry Permission ──────────────────────────────────
+export function useHasMasterEntryPermission() {
+  const { actor, isFetching } = useActor();
+  return useQuery<boolean>({
+    queryKey: ["masterEntryPermission"],
+    queryFn: async () => {
+      if (!actor) return false;
+      return (actor as any).hasMasterEntryPermission();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetMasterEntryGrantees() {
+  const { actor, isFetching } = useActor();
+  return useQuery<import("@icp-sdk/core/principal").Principal[]>({
+    queryKey: ["masterEntryGrantees"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getMasterEntryGrantees();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetRegisteredUsers() {
+  const { actor, isFetching } = useActor();
+  return useQuery<
+    Array<
+      [
+        import("@icp-sdk/core/principal").Principal,
+        import("../backend").UserProfile,
+      ]
+    >
+  >({
+    queryKey: ["registeredUsers"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return (actor as any).getRegisteredUsers();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGrantMasterEntryPermission() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (user: import("@icp-sdk/core/principal").Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).grantMasterEntryPermission(user);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["masterEntryGrantees"] });
+    },
+  });
+}
+
+export function useRevokeMasterEntryPermission() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (user: import("@icp-sdk/core/principal").Principal) => {
+      if (!actor) throw new Error("Not connected");
+      return (actor as any).revokeMasterEntryPermission(user);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["masterEntryGrantees"] });
+    },
+  });
+}
