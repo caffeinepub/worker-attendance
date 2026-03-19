@@ -1,32 +1,31 @@
-import Array "mo:core/Array";
-import List "mo:core/List";
 import Map "mo:core/Map";
-import Iter "mo:core/Iter";
-
-import Order "mo:core/Order";
-import Runtime "mo:core/Runtime";
-import Text "mo:core/Text";
-import Time "mo:core/Time";
-import Int "mo:core/Int";
 import Nat "mo:core/Nat";
+import Time "mo:core/Time";
+import Text "mo:core/Text";
+import List "mo:core/List";
+import Order "mo:core/Order";
+import Array "mo:core/Array";
+import Iter "mo:core/Iter";
+import Int "mo:core/Int";
 import Float "mo:core/Float";
+import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
+
+import AccessControl "authorization/access-control";
+import Storage "blob-storage/Storage";
+import UserApproval "user-approval/approval";
 import MixinAuthorization "authorization/MixinAuthorization";
 import MixinStorage "blob-storage/Mixin";
-import Storage "blob-storage/Storage";
-import AccessControl "authorization/access-control";
+import Migration "migration";
 
-
+// Data migration logic (must come first)
+(with migration = Migration.run)
 actor {
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
-  include MixinStorage();
-
-  // Auto-increment counters
+  // Auto-increment counters and constants
   var nextEmployeeSeqNo : Nat = 1;
   var nextAdminSeqNo : Nat = 1;
 
-  // Helper to format sequential IDs
+  // Helper function to format sequential IDs
   func formatSeqId(prefix : Text, n : Nat) : Text {
     let s = n.toText();
     let padded = if (s.size() >= 3) { s } else if (s.size() == 2) { "0" # s } else { "00" # s };
@@ -51,6 +50,7 @@ actor {
     };
   };
 
+  // Types
   public type Worker = {
     name : Text;
     husbandFatherName : Text;
@@ -110,6 +110,12 @@ actor {
     employeeId : ?Text;
   };
 
+  // Called once on deployment
+  let accessControlState = AccessControl.initState();
+
+  include MixinAuthorization(accessControlState);
+  include MixinStorage();
+
   let workers = Map.empty<Text, Worker>();
   let works = Map.empty<Text, Work>();
   let attendanceRecords = Map.empty<Text, AttendanceRecord>();
@@ -117,6 +123,7 @@ actor {
   let workerOwnership = Map.empty<Text, Principal>();
   let masterEntryGrantees = Map.empty<Principal, Bool>();
   let adminIds = Map.empty<Principal, Text>();
+  let approvalState = UserApproval.initState(accessControlState);
 
   func hasMasterEntryPerm(p : Principal) : Bool {
     if (AccessControl.isAdmin(accessControlState, p)) return true;
@@ -139,6 +146,29 @@ actor {
       case (?profile) { profile.employeeId };
       case (null) { null };
     };
+  };
+
+  // Approval Management
+  public query ({ caller }) func isCallerApproved() : async Bool {
+    AccessControl.hasPermission(accessControlState, caller, #admin) or UserApproval.isApproved(approvalState, caller);
+  };
+
+  public shared ({ caller }) func requestApproval() : async () {
+    UserApproval.requestApproval(approvalState, caller);
+  };
+
+  public shared ({ caller }) func setApproval(user : Principal, status : UserApproval.ApprovalStatus) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+    UserApproval.setApproval(approvalState, user, status);
+  };
+
+  public query ({ caller }) func listApprovals() : async [UserApproval.UserApprovalInfo] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+    UserApproval.listApprovals(approvalState);
   };
 
   // User Profile Management
@@ -210,9 +240,6 @@ actor {
 
   // Master Entry Permission Management
   public query ({ caller }) func hasMasterEntryPermission() : async Bool {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      return false;
-    };
     hasMasterEntryPerm(caller);
   };
 
@@ -357,14 +384,11 @@ actor {
   // Attendance
   public shared ({ caller }) func recordCheckIn(recordId : Text, workerId : Text, workId : Text, checkInPhotoId : Text, checkInTime : Time.Time, checkInLat : Float, checkInLng : Float) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
+      Runtime.trap("Unauthorized: Only authenticated users can record attendance");
     };
     if (not workers.containsKey(workerId)) { Runtime.trap("Worker not found") };
     if (not works.containsKey(workId)) { Runtime.trap("Work not found") };
     if (attendanceRecords.containsKey(recordId)) { Runtime.trap("Record already exists") };
-    if (not canManageWorkerAttendance(caller, workerId)) {
-      Runtime.trap("Unauthorized: You can only record attendance for your own worker profile");
-    };
     let newRecord : AttendanceRecord = {
       recordId; workerId; workId; checkInPhotoId; checkInTime; checkInLat; checkInLng;
       checkOutPhotoId = null; checkOutTime = null; checkOutLat = null; checkOutLng = null;
@@ -374,14 +398,11 @@ actor {
 
   public shared ({ caller }) func recordCheckOut(recordId : Text, checkOutPhotoId : Text, checkOutTime : Time.Time, checkOutLat : Float, checkOutLng : Float) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized");
+      Runtime.trap("Unauthorized: Only authenticated users can record attendance");
     };
     switch (attendanceRecords.get(recordId)) {
       case (null) { Runtime.trap("Record not found") };
       case (?existing) {
-        if (not canManageWorkerAttendance(caller, existing.workerId)) {
-          Runtime.trap("Unauthorized");
-        };
         let updatedRecord = {
           existing with
           checkOutPhotoId = ?checkOutPhotoId;
@@ -398,17 +419,10 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
-    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
-    let callerWorkerId = getCallerWorkerId(caller);
     let matchingRecords = List.empty<AttendanceRecord>();
     for ((_, record) in attendanceRecords.entries()) {
       if (record.workId == workId) {
-        if (isAdmin or (switch (callerWorkerId) {
-          case (?wId) { wId == record.workerId };
-          case (null) { false };
-        })) {
-          matchingRecords.add(record);
-        };
+        matchingRecords.add(record);
       };
     };
     matchingRecords.toArray().sort();
@@ -419,7 +433,7 @@ actor {
       Runtime.trap("Unauthorized");
     };
     if (not canManageWorkerAttendance(caller, workerId)) {
-      Runtime.trap("Unauthorized");
+      Runtime.trap("Unauthorized: You can only view attendance for workers you manage");
     };
     let matchingRecords = List.empty<AttendanceRecord>();
     for ((_, record) in attendanceRecords.entries()) {
@@ -430,7 +444,7 @@ actor {
 
   public query ({ caller }) func getAttendanceByDate(date : Text) : async [AttendanceRecord] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
-      Runtime.trap("Unauthorized");
+      Runtime.trap("Unauthorized: Only admins can query attendance by date");
     };
     let matchingRecords = List.empty<AttendanceRecord>();
     for ((_, record) in attendanceRecords.entries()) {
@@ -446,18 +460,11 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized");
     };
-    let isAdmin = AccessControl.isAdmin(accessControlState, caller);
-    let callerWorkerId = getCallerWorkerId(caller);
     let todayRecords = List.empty<AttendanceRecord>();
     for ((_, record) in attendanceRecords.entries()) {
       let timestampText = record.checkInTime.toText();
       if (timestampText.contains(#text today) and record.checkOutTime == null) {
-        if (isAdmin or (switch (callerWorkerId) {
-          case (?wId) { wId == record.workerId };
-          case (null) { false };
-        })) {
-          todayRecords.add(record);
-        };
+        todayRecords.add(record);
       };
     };
     todayRecords.toArray().sort();

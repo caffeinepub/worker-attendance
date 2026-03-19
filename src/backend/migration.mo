@@ -1,112 +1,116 @@
 import Map "mo:core/Map";
 import Text "mo:core/Text";
 import List "mo:core/List";
-import Time "mo:core/Time";
-import Float "mo:core/Float";
 import Principal "mo:core/Principal";
 
 module {
-  type OldAttendance = {
+  public type OldActor = {
+    workers : Map.Map<Text, OldWorker>;
+    works : Map.Map<Text, OldWork>;
+    attendanceRecords : Map.Map<Text, OldAttendanceRecord>;
+    userProfiles : Map.Map<Principal, OldUserProfile>;
+    workerOwnership : Map.Map<Text, Principal>;
+    masterEntryGrantees : Map.Map<Principal, Bool>;
+    adminIds : Map.Map<Principal, Text>;
+  };
+
+  public type OldWorker = {
+    name : Text;
+    husbandFatherName : Text;
+    caste : Text;
+    village : Text;
+    aadhaarNumber : Text;
+    bankAccountNumber : Text;
+    bankIfsc : Text;
+    bankName : Text;
+    bankBranchName : Text;
+    employeeId : Text;
+    jobTitle : Text;
+    phone : Text;
+    enrollmentPhotoId : Text;
+  };
+
+  public type OldWork = {
+    workId : Text;
+    name : Text;
+    category : Text;
+    jobTitle : Text;
+    locationDescription : Text;
+    date : Text;
+  };
+
+  public type OldAttendanceRecord = {
+    recordId : Text;
     workerId : Text;
-    photoId : Text;
-    latitude : Float;
-    longitude : Float;
-    locationName : Text;
-    timestamp : Time.Time;
+    workId : Text;
+    checkInPhotoId : Text;
+    checkInTime : Int;
+    checkInLat : Float;
+    checkInLng : Float;
+    checkOutPhotoId : ?Text;
+    checkOutTime : ?Int;
+    checkOutLat : ?Float;
+    checkOutLng : ?Float;
   };
 
-  type OldActor = {
-    workers : Map.Map<Text, {
-      name : Text;
-      employeeId : Text;
-      department : Text;
-      jobTitle : Text;
-      phone : Text;
-    }>;
-    attendanceRecords : Map.Map<Text, List.List<OldAttendance>>;
-    userProfiles : Map.Map<Principal, {
-      name : Text;
-      employeeId : ?Text;
-    }>;
-    workerOwnership : Map.Map<Text, Principal>;
+  public type OldUserProfile = {
+    name : Text;
+    employeeId : ?Text;
   };
 
-  type NewActor = {
-    workers : Map.Map<Text, {
-      name : Text;
-      employeeId : Text;
-      department : Text;
-      jobTitle : Text;
-      phone : Text;
-      enrollmentPhotoId : Text;
-    }>;
-    works : Map.Map<Text, {
-      workId : Text;
-      name : Text;
-      locationDescription : Text;
-      date : Text;
-    }>;
-    attendanceRecords : Map.Map<Text, {
-      recordId : Text;
-      workerId : Text;
-      workId : Text;
-      checkInPhotoId : Text;
-      checkInTime : Time.Time;
-      checkInLat : Float;
-      checkInLng : Float;
-      checkOutPhotoId : ?Text;
-      checkOutTime : ?Time.Time;
-      checkOutLat : ?Float;
-      checkOutLng : ?Float;
-    }>;
-    userProfiles : Map.Map<Principal, {
-      name : Text;
-      employeeId : ?Text;
-    }>;
+  public type NewActor = {
+    workers : Map.Map<Text, OldWorker>;
+    works : Map.Map<Text, OldWork>;
+    attendanceRecords : Map.Map<Text, OldAttendanceRecord>;
+    userProfiles : Map.Map<Principal, OldUserProfile>;
     workerOwnership : Map.Map<Text, Principal>;
+    masterEntryGrantees : Map.Map<Principal, Bool>;
+    adminIds : Map.Map<Principal, Text>;
   };
 
   public func run(old : OldActor) : NewActor {
-    let newWorkers = old.workers.map<Text, { name : Text; employeeId : Text; department : Text; jobTitle : Text; phone : Text }, { name : Text; employeeId : Text; department : Text; jobTitle : Text; phone : Text; enrollmentPhotoId : Text }>(
-      func(_id, oldWorker) {
-        {
-          oldWorker with
-          enrollmentPhotoId = "";
-        };
-      }
+    let validWorkers = old.workers.filter(
+      func(_, worker) { worker.name.size() > 0 }
     );
 
-    let newAttendanceRecords = Map.empty<Text, { recordId : Text; workerId : Text; workId : Text; checkInPhotoId : Text; checkInTime : Time.Time; checkInLat : Float; checkInLng : Float; checkOutPhotoId : ?Text; checkOutTime : ?Time.Time; checkOutLat : ?Float; checkOutLng : ?Float }>();
-    old.attendanceRecords.entries().forEach(
-      func((workerId, oldAttendances)) {
-        oldAttendances.values().forEach(
-          func(oldAttendance) {
-            let recordId = "legacy-" # workerId # "-" # oldAttendance.timestamp.toText();
-            let newRecord : { recordId : Text; workerId : Text; workId : Text; checkInPhotoId : Text; checkInTime : Time.Time; checkInLat : Float; checkInLng : Float; checkOutPhotoId : ?Text; checkOutTime : ?Time.Time; checkOutLat : ?Float; checkOutLng : ?Float } = {
-              recordId;
-              workerId;
-              workId = "legacy";
-              checkInPhotoId = "";
-              checkInTime = oldAttendance.timestamp;
-              checkInLat = oldAttendance.latitude;
-              checkInLng = oldAttendance.longitude;
-              checkOutPhotoId = null;
-              checkOutTime = null;
-              checkOutLat = null;
-              checkOutLng = null;
-            };
-            newAttendanceRecords.add(recordId, newRecord);
-          }
-        );
-      }
+    // Clean up workerOwnership map
+    let validWorkerOwnership = old.workerOwnership.filter(
+      func(workerId, _) { validWorkers.containsKey(workerId) }
     );
+
+    // Clean up attendanceRecords
+    let validAttendanceRecords = old.attendanceRecords.filter(
+      func(_, record) { validWorkers.containsKey(record.workerId) }
+    );
+
+    // Clean up masterEntryGrantees
+    let validGrantees = Map.empty<Principal, Bool>();
+    for (p in old.masterEntryGrantees.keys()) {
+      if (not validGrantees.containsKey(p)) {
+        validGrantees.add(p, true);
+      };
+    };
+
+    // Retain existing works
+    let validWorks = old.works;
+    let tempUserProfiles = old.userProfiles;
+
+    // Remove duplicate entries
+    let uniqueAdminIds = Map.empty<Principal, Text>();
+    for ((principal, adminId) in old.adminIds.entries()) {
+      if (not uniqueAdminIds.containsKey(principal)) {
+        uniqueAdminIds.add(principal, adminId);
+      };
+    };
 
     {
-      workers = newWorkers;
-      works = Map.empty<Text, { workId : Text; name : Text; locationDescription : Text; date : Text }>();
-      attendanceRecords = newAttendanceRecords;
-      userProfiles = old.userProfiles;
-      workerOwnership = old.workerOwnership;
+      workers = validWorkers;
+      workerOwnership = validWorkerOwnership;
+      attendanceRecords = validAttendanceRecords;
+      masterEntryGrantees = validGrantees;
+      works = validWorks;
+      userProfiles = tempUserProfiles;
+      adminIds = uniqueAdminIds;
     };
   };
 };

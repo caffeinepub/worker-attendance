@@ -9,15 +9,13 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      padding: "1rem",
+      screens: { "2xl": "1400px" },
     },
     extend: {
       fontFamily: {
-        serif: ['DM Serif Display', 'Georgia', 'serif'],
-        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        sans: ['Figtree', 'system-ui', 'sans-serif'],
+        display: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "oklch(var(--border))",
@@ -75,11 +73,6 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      boxShadow: {
-        xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
-        card: "0 2px 8px rgba(0,40,80,0.08), 0 1px 2px rgba(0,40,80,0.04)",
-        elevated: "0 8px 24px rgba(0,40,80,0.12), 0 2px 6px rgba(0,40,80,0.06)",
       },
       keyframes: {
         "accordion-down": {

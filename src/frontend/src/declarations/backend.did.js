@@ -27,6 +27,25 @@ export const Work = IDL.Record({
   'category' : IDL.Text,
   'workId' : IDL.Text,
 });
+export const WorkerInput = IDL.Record({
+  'bankAccountNumber' : IDL.Text,
+  'husbandFatherName' : IDL.Text,
+  'enrollmentPhotoId' : IDL.Text,
+  'caste' : IDL.Text,
+  'name' : IDL.Text,
+  'bankIfsc' : IDL.Text,
+  'bankName' : IDL.Text,
+  'jobTitle' : IDL.Text,
+  'village' : IDL.Text,
+  'aadhaarNumber' : IDL.Text,
+  'phone' : IDL.Text,
+  'bankBranchName' : IDL.Text,
+});
+export const UserRole = IDL.Variant({
+  'admin' : IDL.Null,
+  'user' : IDL.Null,
+  'guest' : IDL.Null,
+});
 export const Worker = IDL.Record({
   'bankAccountNumber' : IDL.Text,
   'husbandFatherName' : IDL.Text,
@@ -41,11 +60,6 @@ export const Worker = IDL.Record({
   'aadhaarNumber' : IDL.Text,
   'phone' : IDL.Text,
   'bankBranchName' : IDL.Text,
-});
-export const UserRole = IDL.Variant({
-  'admin' : IDL.Null,
-  'user' : IDL.Null,
-  'guest' : IDL.Null,
 });
 export const Time = IDL.Int;
 export const AttendanceRecord = IDL.Record({
@@ -64,6 +78,15 @@ export const AttendanceRecord = IDL.Record({
 export const UserProfile = IDL.Record({
   'name' : IDL.Text,
   'employeeId' : IDL.Opt(IDL.Text),
+});
+export const ApprovalStatus = IDL.Variant({
+  'pending' : IDL.Null,
+  'approved' : IDL.Null,
+  'rejected' : IDL.Null,
+});
+export const UserApprovalInfo = IDL.Record({
+  'status' : ApprovalStatus,
+  'principal' : IDL.Principal,
 });
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
 
@@ -96,7 +119,8 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addWork' : IDL.Func([Work], [], []),
-  'addWorker' : IDL.Func([Worker], [], []),
+  'addWorker' : IDL.Func([WorkerInput], [IDL.Text], []),
+  'assignAdminId' : IDL.Func([IDL.Principal], [IDL.Text], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'getAllWorkers' : IDL.Func([], [IDL.Vec(Worker)], ['query']),
   'getAllWorks' : IDL.Func([], [IDL.Vec(Work)], ['query']),
@@ -118,6 +142,7 @@ export const idlService = IDL.Service({
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getMasterEntryGrantees' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
+  'getMyId' : IDL.Func([], [IDL.Text], ['query']),
   'getRegisteredUsers' : IDL.Func(
       [],
       [IDL.Vec(IDL.Tuple(IDL.Principal, UserProfile))],
@@ -138,6 +163,8 @@ export const idlService = IDL.Service({
   'grantMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
   'hasMasterEntryPermission' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'isCallerApproved' : IDL.Func([], [IDL.Bool], ['query']),
+  'listApprovals' : IDL.Func([], [IDL.Vec(UserApprovalInfo)], ['query']),
   'recordCheckIn' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text, Time, IDL.Float64, IDL.Float64],
       [],
@@ -150,8 +177,10 @@ export const idlService = IDL.Service({
     ),
   'removeWork' : IDL.Func([IDL.Text], [], []),
   'removeWorker' : IDL.Func([IDL.Text], [], []),
+  'requestApproval' : IDL.Func([], [], []),
   'revokeMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setApproval' : IDL.Func([IDL.Principal, ApprovalStatus], [], []),
   'updateWork' : IDL.Func([IDL.Text, Work], [], []),
   'updateWorker' : IDL.Func([IDL.Text, Worker], [], []),
   'uploadPhoto' : IDL.Func([ExternalBlob], [ExternalBlob], []),
@@ -179,6 +208,25 @@ export const idlFactory = ({ IDL }) => {
     'category' : IDL.Text,
     'workId' : IDL.Text,
   });
+  const WorkerInput = IDL.Record({
+    'bankAccountNumber' : IDL.Text,
+    'husbandFatherName' : IDL.Text,
+    'enrollmentPhotoId' : IDL.Text,
+    'caste' : IDL.Text,
+    'name' : IDL.Text,
+    'bankIfsc' : IDL.Text,
+    'bankName' : IDL.Text,
+    'jobTitle' : IDL.Text,
+    'village' : IDL.Text,
+    'aadhaarNumber' : IDL.Text,
+    'phone' : IDL.Text,
+    'bankBranchName' : IDL.Text,
+  });
+  const UserRole = IDL.Variant({
+    'admin' : IDL.Null,
+    'user' : IDL.Null,
+    'guest' : IDL.Null,
+  });
   const Worker = IDL.Record({
     'bankAccountNumber' : IDL.Text,
     'husbandFatherName' : IDL.Text,
@@ -193,11 +241,6 @@ export const idlFactory = ({ IDL }) => {
     'aadhaarNumber' : IDL.Text,
     'phone' : IDL.Text,
     'bankBranchName' : IDL.Text,
-  });
-  const UserRole = IDL.Variant({
-    'admin' : IDL.Null,
-    'user' : IDL.Null,
-    'guest' : IDL.Null,
   });
   const Time = IDL.Int;
   const AttendanceRecord = IDL.Record({
@@ -216,6 +259,15 @@ export const idlFactory = ({ IDL }) => {
   const UserProfile = IDL.Record({
     'name' : IDL.Text,
     'employeeId' : IDL.Opt(IDL.Text),
+  });
+  const ApprovalStatus = IDL.Variant({
+    'pending' : IDL.Null,
+    'approved' : IDL.Null,
+    'rejected' : IDL.Null,
+  });
+  const UserApprovalInfo = IDL.Record({
+    'status' : ApprovalStatus,
+    'principal' : IDL.Principal,
   });
   const ExternalBlob = IDL.Vec(IDL.Nat8);
   
@@ -248,7 +300,8 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addWork' : IDL.Func([Work], [], []),
-    'addWorker' : IDL.Func([Worker], [], []),
+    'addWorker' : IDL.Func([WorkerInput], [IDL.Text], []),
+    'assignAdminId' : IDL.Func([IDL.Principal], [IDL.Text], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'getAllWorkers' : IDL.Func([], [IDL.Vec(Worker)], ['query']),
     'getAllWorks' : IDL.Func([], [IDL.Vec(Work)], ['query']),
@@ -274,6 +327,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(IDL.Principal)],
         ['query'],
       ),
+    'getMyId' : IDL.Func([], [IDL.Text], ['query']),
     'getRegisteredUsers' : IDL.Func(
         [],
         [IDL.Vec(IDL.Tuple(IDL.Principal, UserProfile))],
@@ -294,6 +348,8 @@ export const idlFactory = ({ IDL }) => {
     'grantMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
     'hasMasterEntryPermission' : IDL.Func([], [IDL.Bool], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'isCallerApproved' : IDL.Func([], [IDL.Bool], ['query']),
+    'listApprovals' : IDL.Func([], [IDL.Vec(UserApprovalInfo)], ['query']),
     'recordCheckIn' : IDL.Func(
         [
           IDL.Text,
@@ -314,8 +370,10 @@ export const idlFactory = ({ IDL }) => {
       ),
     'removeWork' : IDL.Func([IDL.Text], [], []),
     'removeWorker' : IDL.Func([IDL.Text], [], []),
+    'requestApproval' : IDL.Func([], [], []),
     'revokeMasterEntryPermission' : IDL.Func([IDL.Principal], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setApproval' : IDL.Func([IDL.Principal, ApprovalStatus], [], []),
     'updateWork' : IDL.Func([IDL.Text, Work], [], []),
     'updateWorker' : IDL.Func([IDL.Text, Worker], [], []),
     'uploadPhoto' : IDL.Func([ExternalBlob], [ExternalBlob], []),

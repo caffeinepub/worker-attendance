@@ -14,6 +14,24 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export interface WorkerInput {
+    bankAccountNumber: string;
+    husbandFatherName: string;
+    enrollmentPhotoId: string;
+    caste: string;
+    name: string;
+    bankIfsc: string;
+    bankName: string;
+    jobTitle: string;
+    village: string;
+    aadhaarNumber: string;
+    phone: string;
+    bankBranchName: string;
+}
+export interface UserApprovalInfo {
+    status: ApprovalStatus;
+    principal: Principal;
+}
 export interface AttendanceRecord {
     workerId: string;
     checkInPhotoId: string;
@@ -55,6 +73,11 @@ export interface UserProfile {
     name: string;
     employeeId?: string;
 }
+export enum ApprovalStatus {
+    pending = "pending",
+    approved = "approved",
+    rejected = "rejected"
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -62,7 +85,8 @@ export enum UserRole {
 }
 export interface backendInterface {
     addWork(work: Work): Promise<void>;
-    addWorker(worker: Worker): Promise<void>;
+    addWorker(input: WorkerInput): Promise<string>;
+    assignAdminId(user: Principal): Promise<string>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     getAllWorkers(): Promise<Array<Worker>>;
     getAllWorks(): Promise<Array<Work>>;
@@ -72,6 +96,7 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getMasterEntryGrantees(): Promise<Array<Principal>>;
+    getMyId(): Promise<string>;
     getRegisteredUsers(): Promise<Array<[Principal, UserProfile]>>;
     getTodayCheckIns(today: string): Promise<Array<AttendanceRecord>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
@@ -80,12 +105,16 @@ export interface backendInterface {
     grantMasterEntryPermission(user: Principal): Promise<void>;
     hasMasterEntryPermission(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
+    isCallerApproved(): Promise<boolean>;
+    listApprovals(): Promise<Array<UserApprovalInfo>>;
     recordCheckIn(recordId: string, workerId: string, workId: string, checkInPhotoId: string, checkInTime: Time, checkInLat: number, checkInLng: number): Promise<void>;
     recordCheckOut(recordId: string, checkOutPhotoId: string, checkOutTime: Time, checkOutLat: number, checkOutLng: number): Promise<void>;
     removeWork(workId: string): Promise<void>;
     removeWorker(employeeId: string): Promise<void>;
+    requestApproval(): Promise<void>;
     revokeMasterEntryPermission(user: Principal): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setApproval(user: Principal, status: ApprovalStatus): Promise<void>;
     updateWork(workId: string, updatedWork: Work): Promise<void>;
     updateWorker(employeeId: string, updatedWorker: Worker): Promise<void>;
     uploadPhoto(blob: ExternalBlob): Promise<ExternalBlob>;

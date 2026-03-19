@@ -1,15 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  AttendanceRecord,
-  UserProfile,
-  UserRole,
-  Work,
-  Worker,
-} from "../backend";
+import type { AttendanceRecord, Work, Worker, WorkerInput } from "../backend";
 import { useActor } from "./useActor";
 
-// ─── Workers ────────────────────────────────────────────────
-export function useGetAllWorkers() {
+/* ─── Workers ─────────────────────────────────────────────── */
+export function useWorkers() {
   const { actor, isFetching } = useActor();
   return useQuery<Worker[]>({
     queryKey: ["workers"],
@@ -18,38 +12,19 @@ export function useGetAllWorkers() {
       return actor.getAllWorkers();
     },
     enabled: !!actor && !isFetching,
+    staleTime: 30_000,
   });
 }
-
-export type WorkerInput = Omit<Worker, "employeeId">;
 
 export function useAddWorker() {
   const { actor } = useActor();
   const qc = useQueryClient();
-  return useMutation<string, Error, WorkerInput>({
-    mutationFn: async (worker: WorkerInput) => {
+  return useMutation({
+    mutationFn: async (input: WorkerInput) => {
       if (!actor) throw new Error("Not connected");
-      // Backend returns auto-generated employeeId (EMP-NNN)
-      const result = await (actor as any).addWorker(worker);
-      return typeof result === "string" ? result : "";
+      return actor.addWorker(input);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workers"] }),
-  });
-}
-
-export function useGetMyId() {
-  const { actor, isFetching } = useActor();
-  return useQuery<string>({
-    queryKey: ["myId"],
-    queryFn: async () => {
-      if (!actor) return "USR";
-      try {
-        return await (actor as any).getMyId();
-      } catch {
-        return "USR";
-      }
-    },
-    enabled: !!actor && !isFetching,
   });
 }
 
@@ -68,7 +43,7 @@ export function useUpdateWorker() {
   });
 }
 
-export function useRemoveWorker() {
+export function useDeleteWorker() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
@@ -80,8 +55,19 @@ export function useRemoveWorker() {
   });
 }
 
-// ─── Works ──────────────────────────────────────────────────
-export function useGetAllWorks() {
+export function useUploadPhoto() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      if (!actor) throw new Error("Not connected");
+      const { uploadPhotoFile } = await import("../utils/photoUtils");
+      return uploadPhotoFile(file, actor);
+    },
+  });
+}
+
+/* ─── Works ───────────────────────────────────────────────── */
+export function useWorks() {
   const { actor, isFetching } = useActor();
   return useQuery<Work[]>({
     queryKey: ["works"],
@@ -90,6 +76,7 @@ export function useGetAllWorks() {
       return actor.getAllWorks();
     },
     enabled: !!actor && !isFetching,
+    staleTime: 30_000,
   });
 }
 
@@ -105,7 +92,19 @@ export function useAddWork() {
   });
 }
 
-export function useRemoveWork() {
+export function useUpdateWork() {
+  const { actor } = useActor();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ workId, work }: { workId: string; work: Work }) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.updateWork(workId, work);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["works"] }),
+  });
+}
+
+export function useDeleteWork() {
   const { actor } = useActor();
   const qc = useQueryClient();
   return useMutation({
@@ -117,29 +116,18 @@ export function useRemoveWork() {
   });
 }
 
-// ─── Attendance ──────────────────────────────────────────────
-export function useGetAttendanceByWork(workId: string) {
+/* ─── Attendance ──────────────────────────────────────────── */
+export function useTodayCheckIns() {
   const { actor, isFetching } = useActor();
+  const today = new Date().toISOString().split("T")[0];
   return useQuery<AttendanceRecord[]>({
-    queryKey: ["attendance", workId],
-    queryFn: async () => {
-      if (!actor || !workId) return [];
-      return actor.getAttendanceByWork(workId);
-    },
-    enabled: !!actor && !isFetching && !!workId,
-  });
-}
-
-export function useGetTodayCheckIns(today: string) {
-  const { actor, isFetching } = useActor();
-  return useQuery<AttendanceRecord[]>({
-    queryKey: ["todayCheckIns", today],
+    queryKey: ["checkIns", today],
     queryFn: async () => {
       if (!actor) return [];
       return actor.getTodayCheckIns(today);
     },
-    enabled: !!actor && !isFetching && !!today,
-    refetchInterval: 30000,
+    enabled: !!actor && !isFetching,
+    staleTime: 15_000,
   });
 }
 
@@ -153,8 +141,8 @@ export function useRecordCheckIn() {
       workId: string;
       checkInPhotoId: string;
       checkInTime: bigint;
-      checkInLat: number;
-      checkInLng: number;
+      lat: number;
+      lng: number;
     }) => {
       if (!actor) throw new Error("Not connected");
       return actor.recordCheckIn(
@@ -163,13 +151,13 @@ export function useRecordCheckIn() {
         params.workId,
         params.checkInPhotoId,
         params.checkInTime,
-        params.checkInLat,
-        params.checkInLng,
+        params.lat,
+        params.lng,
       );
     },
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["attendance", vars.workId] });
-      qc.invalidateQueries({ queryKey: ["todayCheckIns"] });
+    onSuccess: () => {
+      const today = new Date().toISOString().split("T")[0];
+      qc.invalidateQueries({ queryKey: ["checkIns", today] });
     },
   });
 }
@@ -180,151 +168,23 @@ export function useRecordCheckOut() {
   return useMutation({
     mutationFn: async (params: {
       recordId: string;
-      workId: string;
       checkOutPhotoId: string;
       checkOutTime: bigint;
-      checkOutLat: number;
-      checkOutLng: number;
+      lat: number;
+      lng: number;
     }) => {
       if (!actor) throw new Error("Not connected");
       return actor.recordCheckOut(
         params.recordId,
         params.checkOutPhotoId,
         params.checkOutTime,
-        params.checkOutLat,
-        params.checkOutLng,
+        params.lat,
+        params.lng,
       );
     },
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["attendance", vars.workId] });
-      qc.invalidateQueries({ queryKey: ["todayCheckIns"] });
-    },
-  });
-}
-
-// ─── Auth / Role ─────────────────────────────────────────────
-export function useIsCallerAdmin() {
-  const { actor, isFetching } = useActor();
-  return useQuery<boolean>({
-    queryKey: ["isAdmin"],
-    queryFn: async () => {
-      if (!actor) return false;
-      return actor.isCallerAdmin();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetCallerUserRole() {
-  const { actor, isFetching } = useActor();
-  return useQuery<UserRole>({
-    queryKey: ["userRole"],
-    queryFn: async () => {
-      if (!actor) throw new Error("No actor");
-      return actor.getCallerUserRole();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetCallerUserProfile() {
-  const { actor, isFetching: actorFetching } = useActor();
-  const query = useQuery<UserProfile | null>({
-    queryKey: ["currentUserProfile"],
-    queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getCallerUserProfile();
-    },
-    enabled: !!actor && !actorFetching,
-    retry: false,
-  });
-  return {
-    ...query,
-    isLoading: actorFetching || query.isLoading,
-    isFetched: !!actor && query.isFetched,
-  };
-}
-
-export function useSaveCallerUserProfile() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (profile: UserProfile) => {
-      if (!actor) throw new Error("Not connected");
-      return actor.saveCallerUserProfile(profile);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["currentUserProfile"] }),
-  });
-}
-
-// ─── Master Entry Permission ──────────────────────────────────
-export function useHasMasterEntryPermission() {
-  const { actor, isFetching } = useActor();
-  return useQuery<boolean>({
-    queryKey: ["masterEntryPermission"],
-    queryFn: async () => {
-      if (!actor) return false;
-      return (actor as any).hasMasterEntryPermission();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetMasterEntryGrantees() {
-  const { actor, isFetching } = useActor();
-  return useQuery<import("@icp-sdk/core/principal").Principal[]>({
-    queryKey: ["masterEntryGrantees"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return (actor as any).getMasterEntryGrantees();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGetRegisteredUsers() {
-  const { actor, isFetching } = useActor();
-  return useQuery<
-    Array<
-      [
-        import("@icp-sdk/core/principal").Principal,
-        import("../backend").UserProfile,
-      ]
-    >
-  >({
-    queryKey: ["registeredUsers"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return (actor as any).getRegisteredUsers();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
-export function useGrantMasterEntryPermission() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (user: import("@icp-sdk/core/principal").Principal) => {
-      if (!actor) throw new Error("Not connected");
-      return (actor as any).grantMasterEntryPermission(user);
-    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["masterEntryGrantees"] });
-    },
-  });
-}
-
-export function useRevokeMasterEntryPermission() {
-  const { actor } = useActor();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (user: import("@icp-sdk/core/principal").Principal) => {
-      if (!actor) throw new Error("Not connected");
-      return (actor as any).revokeMasterEntryPermission(user);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["masterEntryGrantees"] });
+      const today = new Date().toISOString().split("T")[0];
+      qc.invalidateQueries({ queryKey: ["checkIns", today] });
     },
   });
 }

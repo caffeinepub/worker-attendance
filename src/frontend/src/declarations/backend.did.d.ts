@@ -10,6 +10,9 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export type ApprovalStatus = { 'pending' : null } |
+  { 'approved' : null } |
+  { 'rejected' : null };
 export interface AttendanceRecord {
   'workerId' : string,
   'checkInPhotoId' : string,
@@ -25,6 +28,10 @@ export interface AttendanceRecord {
 }
 export type ExternalBlob = Uint8Array;
 export type Time = bigint;
+export interface UserApprovalInfo {
+  'status' : ApprovalStatus,
+  'principal' : Principal,
+}
 export interface UserProfile { 'name' : string, 'employeeId' : [] | [string] }
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
@@ -47,6 +54,20 @@ export interface Worker {
   'bankName' : string,
   'jobTitle' : string,
   'employeeId' : string,
+  'village' : string,
+  'aadhaarNumber' : string,
+  'phone' : string,
+  'bankBranchName' : string,
+}
+export interface WorkerInput {
+  'bankAccountNumber' : string,
+  'husbandFatherName' : string,
+  'enrollmentPhotoId' : string,
+  'caste' : string,
+  'name' : string,
+  'bankIfsc' : string,
+  'bankName' : string,
+  'jobTitle' : string,
   'village' : string,
   'aadhaarNumber' : string,
   'phone' : string,
@@ -81,7 +102,8 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addWork' : ActorMethod<[Work], undefined>,
-  'addWorker' : ActorMethod<[Worker], undefined>,
+  'addWorker' : ActorMethod<[WorkerInput], string>,
+  'assignAdminId' : ActorMethod<[Principal], string>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'getAllWorkers' : ActorMethod<[], Array<Worker>>,
   'getAllWorks' : ActorMethod<[], Array<Work>>,
@@ -91,6 +113,7 @@ export interface _SERVICE {
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getMasterEntryGrantees' : ActorMethod<[], Array<Principal>>,
+  'getMyId' : ActorMethod<[], string>,
   'getRegisteredUsers' : ActorMethod<[], Array<[Principal, UserProfile]>>,
   'getTodayCheckIns' : ActorMethod<[string], Array<AttendanceRecord>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
@@ -99,6 +122,8 @@ export interface _SERVICE {
   'grantMasterEntryPermission' : ActorMethod<[Principal], undefined>,
   'hasMasterEntryPermission' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'isCallerApproved' : ActorMethod<[], boolean>,
+  'listApprovals' : ActorMethod<[], Array<UserApprovalInfo>>,
   'recordCheckIn' : ActorMethod<
     [string, string, string, string, Time, number, number],
     undefined
@@ -109,8 +134,10 @@ export interface _SERVICE {
   >,
   'removeWork' : ActorMethod<[string], undefined>,
   'removeWorker' : ActorMethod<[string], undefined>,
+  'requestApproval' : ActorMethod<[], undefined>,
   'revokeMasterEntryPermission' : ActorMethod<[Principal], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setApproval' : ActorMethod<[Principal, ApprovalStatus], undefined>,
   'updateWork' : ActorMethod<[string, Work], undefined>,
   'updateWorker' : ActorMethod<[string, Worker], undefined>,
   'uploadPhoto' : ActorMethod<[ExternalBlob], ExternalBlob>,
